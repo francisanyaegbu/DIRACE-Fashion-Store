@@ -1,0 +1,637 @@
+Build a premium, modern, fully responsive fashion e-commerce website for a clothing brand called **DIRACE**.
+
+The website should feel like a real contemporary fashion brand — clean, bold, minimal, editorial, and premium. Avoid the appearance of a generic Shopify template.
+
+## BRAND
+
+Brand name: DIRACE
+
+Brand positioning:
+DIRACE is a modern fashion/clothing brand focused on stylish, high-quality clothing with a strong contemporary identity.
+
+Design direction:
+
+* Premium
+* Minimal
+* Fashion-forward
+* Editorial
+* Bold typography
+* Clean layouts
+* High-quality imagery
+* Strong use of whitespace
+* Smooth animations
+* Mobile-first and fully responsive
+
+Use a mostly monochromatic visual system:
+
+* Black
+* White
+* Off-white
+* Soft gray
+* Very subtle accent colors only where necessary
+
+Do NOT overuse gradients, glassmorphism, excessive rounded cards, or flashy UI effects.
+
+The website should look suitable for a serious fashion brand and should be visually impressive enough to use as a client project.
+
+---
+
+# TECH STACK
+
+Use:
+
+* Next.js
+* React
+* TypeScript
+* Tailwind CSS
+* Modern component architecture
+* Lucide React icons
+* Framer Motion for tasteful animations
+* Use clean reusable components
+* Use responsive CSS throughout
+
+Structure the application so it can later be connected to a real backend/database and payment gateway.
+
+---
+
+# WEBSITE STRUCTURE
+
+Create the following pages:
+
+1. Home
+2. Shop
+3. Product Details
+4. Collections
+5. About
+6. Contact
+7. Cart
+8. Checkout
+9. Wishlist
+10. Search
+11. Account/Login
+12. Admin Dashboard
+
+---
+
+# 1. HOMEPAGE
+
+Create a visually striking fashion landing page.
+
+### Header
+
+Create a sticky/transparent navigation header.
+
+Left:
+DIRACE logo/wordmark.
+
+Center:
+
+* SHOP
+* COLLECTIONS
+* ABOUT
+* CONTACT
+
+Right:
+
+* Search icon
+* Account icon
+* Wishlist icon
+* Shopping bag/cart icon with item count
+
+On mobile:
+Use a hamburger menu with a smooth slide-out navigation.
+
+The header should change appearance when scrolling.
+
+---
+
+### HERO SECTION
+
+Create a large editorial fashion hero section.
+
+Use a full-width fashion image/video placeholder.
+
+Overlay:
+
+DIRACE
+
+"DEFINE YOUR OWN STANDARD."
+
+Buttons:
+
+SHOP MEN
+SHOP WOMEN
+
+The hero should feel like a fashion campaign rather than a normal e-commerce banner.
+
+Add subtle entrance animations.
+
+---
+
+### FEATURED COLLECTION
+
+Section heading:
+
+"THE LATEST DROP"
+
+Display 4–6 featured products.
+
+Each product card should contain:
+
+* Product image
+* Product name
+* Category
+* Price
+* Available colors
+* Wishlist button
+
+Hover interaction:
+
+* Slight image zoom
+* Reveal second product image where available
+* Quick Add button
+
+---
+
+### COLLECTION BANNER
+
+Create a large editorial image section for a featured collection.
+
+Example:
+
+"THE NEW STANDARD"
+
+"Explore the latest DIRACE collection."
+
+Button:
+EXPLORE COLLECTION
+
+---
+
+### SHOP BY CATEGORY
+
+Create visually large category cards:
+
+MEN
+WOMEN
+NEW ARRIVALS
+BEST SELLERS
+
+Each card should use an editorial fashion image.
+
+---
+
+### BEST SELLERS
+
+Display a horizontal/product grid of popular products.
+
+Include:
+
+* Product image
+* Name
+* Price
+* Rating
+* Wishlist
+* Quick add
+
+---
+
+### BRAND STATEMENT
+
+Create a minimalist section with large typography:
+
+"WEAR WHAT DEFINES YOU."
+
+Add a short paragraph explaining the DIRACE philosophy.
+
+---
+
+### INSTAGRAM / SOCIAL SECTION
+
+Create a visual grid of 6 fashion images.
+
+Heading:
+
+"FOLLOW THE MOVEMENT"
+
+Add:
+@DIRACE
+
+The section should be visually attractive and ready to connect to Instagram content later.
+
+---
+
+### NEWSLETTER
+
+Create a premium newsletter section:
+
+"STAY IN THE LOOP"
+
+"Be the first to know about new drops, exclusive releases and DIRACE updates."
+
+Email input:
+"Your email address"
+
+Button:
+JOIN
+
+---
+
+### FOOTER
+
+Include:
+
+DIRACE logo
+
+Navigation:
+
+* Shop
+* Collections
+* About
+* Contact
+* FAQ
+* Shipping & Returns
+* Privacy Policy
+* Terms & Conditions
+
+Social:
+
+* Instagram
+* TikTok
+* Facebook
+
+Payment icons/placeholders.
+
+Newsletter signup.
+
+Copyright:
+© 2026 DIRACE. All rights reserved.
+
+---
+
+# 2. SHOP PAGE
+
+Create a professional e-commerce product listing page.
+
+Top:
+
+SHOP
+
+"Explore the DIRACE collection."
+
+Add category navigation:
+
+ALL
+NEW ARRIVALS
+MEN
+WOMEN
+TOPS
+BOTTOMS
+OUTERWEAR
+ACCESSORIES
+
+Add filters:
+
+* Category
+* Size
+* Color
+* Price
+* Availability
+
+Add sorting:
+
+* Featured
+* Newest
+* Price: Low to High
+* Price: High to Low
+* Best Selling
+
+Use a responsive product grid:
+
+Desktop: 4 columns
+Tablet: 3 columns
+Mobile: 2 columns
+
+Product cards should look premium and minimal.
+
+---
+
+# 3. PRODUCT DETAILS PAGE
+
+Create a high-end product detail experience.
+
+Left side:
+
+Large product image gallery.
+
+Include:
+
+* Main image
+* Thumbnail images
+* Zoom interaction
+
+Right side:
+
+Product name
+
+Price
+
+Rating
+
+Short description
+
+Color selector
+
+Size selector:
+
+XS
+S
+M
+L
+XL
+XXL
+
+Size guide link.
+
+Quantity selector.
+
+Large button:
+
+ADD TO BAG
+
+Secondary:
+
+ADD TO WISHLIST
+
+Also include:
+
+* Product details
+* Materials
+* Care instructions
+* Shipping information
+* Returns information
+
+Use expandable accordions.
+
+Below:
+
+"YOU MAY ALSO LIKE"
+
+Display related products.
+
+---
+
+# 4. COLLECTIONS PAGE
+
+Create an editorial collections page.
+
+Large visual collection cards:
+
+NEW SEASON
+ESSENTIALS
+STREET EDIT
+SIGNATURE
+LIMITED DROP
+
+Each collection should have a large image, title and CTA.
+
+Use asymmetrical layouts where appropriate to make the page feel more editorial.
+
+---
+
+# 5. ABOUT PAGE
+
+Create a premium brand story.
+
+Hero:
+
+"BUILT TO BE DISTINCT."
+
+Explain the DIRACE philosophy, identity and approach to fashion.
+
+Sections:
+
+OUR STORY
+
+OUR PHILOSOPHY
+
+QUALITY & CRAFT
+
+THE DIRACE STANDARD
+
+Include large editorial photography.
+
+Avoid excessive text.
+
+Make it feel like a real fashion brand's About page.
+
+---
+
+# 6. CONTACT PAGE
+
+Create a clean contact page.
+
+Include:
+
+Contact form:
+
+* Name
+* Email
+* Subject
+* Message
+
+Button:
+SEND MESSAGE
+
+Also include:
+
+Email
+Phone
+Social media
+Business location placeholder
+
+Add FAQ links.
+
+---
+
+# 7. CART PAGE
+
+Create a polished shopping cart.
+
+Show:
+
+Product image
+Product name
+Selected size
+Selected color
+Quantity controls
+Price
+Remove button
+
+Order summary:
+
+Subtotal
+Shipping
+Discount
+Total
+
+Buttons:
+
+CONTINUE SHOPPING
+PROCEED TO CHECKOUT
+
+Cart should update dynamically.
+
+Persist cart data using localStorage for now.
+
+---
+
+# 8. CHECKOUT PAGE
+
+Create a clean multi-step checkout.
+
+Step 1:
+Customer information
+
+Step 2:
+Shipping address
+
+Step 3:
+Delivery method
+
+Step 4:
+Payment
+
+Step 5:
+Order confirmation
+
+For now, implement the frontend payment interface and create a clear abstraction so a real payment provider can be connected later.
+
+Do NOT hardcode real payment credentials.
+
+Include:
+
+* Order summary
+* Promo code
+* Shipping fee
+* Total
+
+---
+
+# 9. WISHLIST
+
+Allow users to add/remove products from wishlist.
+
+Display:
+
+Product image
+Product name
+Price
+Availability
+Add to cart
+Remove from wishlist
+
+Persist wishlist using localStorage.
+
+---
+
+# 10. SEARCH
+
+Create a full-screen or dedicated search interface.
+
+Search products by:
+
+* Name
+* Category
+* Collection
+* Description
+
+Show live search results as the user types.
+
+Include empty state:
+
+"No products found."
+
+---
+
+# 11. AUTHENTICATION
+
+Create login/signup UI.
+
+Login:
+
+* Email
+* Password
+
+Signup:
+
+* Full name
+* Email
+* Password
+* Confirm password
+
+Include:
+
+Forgot password
+
+Google login placeholder.
+
+Structure authentication so it can later be connected to Supabase, Firebase, or a custom backend.
+
+Do not fake successful authentication.
+
+---
+
+# 12. ADMIN DASHBOARD
+
+Create a protected-looking admin dashboard UI for the store owner.
+
+Dashboard sections:
+
+Overview
+Products
+Orders
+Customers
+Collections
+Categories
+Discounts
+Inventory
+Settings
+
+### Dashboard Overview
+
+Display:
+
+Total Sales
+Orders
+Products
+Customers
+
+Include sales analytics chart.
+
+### Products
+
+Allow the admin UI to:
+
+* Add product
+* Edit product
+* Delete product
+* Update price
+* Update stock
+* Add product images
+* Set category
+* Set collection
+* Set sizes
+* Set colors
+* Mark product as featured
+* Mark as new arrival
+
+### Product creation form
+
+Fields:
+
+Product name
+Description
+Price
+Sale price
+Category

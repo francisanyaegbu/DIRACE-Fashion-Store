@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "DIRACE Fashion Store"
+description = "A premium, editorial fashion storefront for DIRACE with responsive shopping, product discovery, cart, wishlist, checkout, account, and admin experiences."
+version = "1.0.0"
+id = "artifacts/dirace-store"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24071
+
+[services.development]
+run = "pnpm --filter @workspace/dirace-store run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/dirace-store", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/dirace-store/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24071"
+BASE_PATH = "/"
