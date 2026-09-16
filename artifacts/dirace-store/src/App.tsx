@@ -1,3 +1,5 @@
+import { auth, googleAuthProvider } from "./lib/firebase";
+import { signInWithPopup, signOut, onAuthStateChanged, type User } from "firebase/auth";
 import { useMemo, useState, type ReactNode } from 'react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -19,11 +21,12 @@ type Product = {
 };
 type CartItem = { productId: string; size: string; quantity: number };
 
-// Supabase will become the source of truth for this catalog.
-const products: Product[] = [];
+import { createContext, useContext, useEffect } from "react";
+const ProductsContext = createContext<Product[]>([]);
+function useProducts() { return useContext(ProductsContext); }
 
 function money(value: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(value);
 }
 
 function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount: number }) {
@@ -85,11 +88,13 @@ function ProductCard({ product, isSaved, onToggleWish }: { product: Product; isS
   </article>;
 }
 
-function CatalogNotice({ title = 'Catalog awaiting connection.', copy = 'Connect Supabase to load products, collections, and availability into this space.' }: { title?: string; copy?: string }) {
+function CatalogNotice({ title = 'Catalog awaiting connection.', copy = 'Connect the Database to load products, collections, and availability into this space.' }: { title?: string; copy?: string }) {
   return <div className="empty-state"><div className="accent"><ShoppingBag size={24} /></div><h2 className="display">{title}</h2><p>{copy}</p></div>;
 }
 
 function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
+  const products = useProducts();
+
   return <main>
     <section className="hero">
       <div className="hero-copy reveal"><div><div className="eyebrow accent">Collection 01 / 25</div><h1 className="display">DEFINE<br />YOUR OWN<br /><span className="accent">STANDARD.</span></h1></div><div><p>DIRACE is a uniform for the self-defined. Considered shapes, uncompromising materials, no borrowed ideas.</p><div className="hero-note"><span>THE NEW STANDARD</span><Link href="/shop" className="circle-arrow" aria-label="Shop the latest drop" data-testid="link-hero-shop"><ArrowRight size={17} /></Link></div></div></div>
@@ -114,18 +119,22 @@ function Signup() {
 }
 
 function Shop({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
+  const products = useProducts();
+
   const [category, setCategory] = useState('All');
   const categories = ['All', 'Outerwear', 'Tailoring', 'Essentials', 'Knitwear', 'Denim'];
   const filtered = category === 'All' ? products : products.filter((product) => product.category === category);
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Shop</div><h1 className="display">THE COLLECTION</h1></div><div className="shop-toolbar"><span className="mono muted">{filtered.length} pieces</span><div className="filter-row">{categories.map((item) => <button key={item} className={`filter-btn ${category === item ? 'active' : ''}`} onClick={() => setCategory(item)} data-testid={`button-filter-${item.toLowerCase()}`}>{item}</button>)}</div><button className="filter-btn">Sort <ChevronDown size={13} style={{ verticalAlign: 'middle' }} /></button></div>{filtered.length > 0 ? <div className="shop-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div> : <CatalogNotice title="No products loaded." copy="Connect Supabase to populate the DIRACE collection." />}</main>;
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Shop</div><h1 className="display">THE COLLECTION</h1></div><div className="shop-toolbar"><span className="mono muted">{filtered.length} pieces</span><div className="filter-row">{categories.map((item) => <button key={item} className={`filter-btn ${category === item ? 'active' : ''}`} onClick={() => setCategory(item)} data-testid={`button-filter-${item.toLowerCase()}`}>{item}</button>)}</div><button className="filter-btn">Sort <ChevronDown size={13} style={{ verticalAlign: 'middle' }} /></button></div>{filtered.length > 0 ? <div className="shop-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div> : <CatalogNotice title="No products loaded." copy="Connect the Database to populate the DIRACE collection." />}</main>;
 }
 
 function ProductDetail({ wishlist, onToggleWish, onAdd }: { wishlist: string[]; onToggleWish: (id: string) => void; onAdd: (id: string, size: string) => void }) {
+  const products = useProducts();
+
   const [, params] = useRoute('/product/:id');
   const product = products.find((item) => item.id === params?.id);
   const [size, setSize] = useState('');
   const [added, setAdded] = useState(false);
-  if (!product) return <main className="page-wrap detail-page"><CatalogNotice title="Product not available." copy="This product will appear when the Supabase catalog is connected." /></main>;
+  if (!product) return <main className="page-wrap detail-page"><CatalogNotice title="Product not available." copy="This product will appear when the the Database catalog is connected." /></main>;
   const selectedSize = size || product.sizes[2] || product.sizes[0];
   const add = () => { onAdd(product.id, selectedSize); setAdded(true); window.setTimeout(() => setAdded(false), 1800); };
   return <main className="page-wrap detail-page"><div className="mono muted" style={{ marginBottom: 24 }}><Link href="/shop">Shop</Link> / {product.category} / {product.name}</div><div className="detail-layout"><div className="detail-gallery"><img src={product.image} alt={product.alt} /><img src={product.image} alt={`${product.name} detail`} style={{ filter: 'saturate(.3) contrast(1.08)', transform: 'scaleX(-1)' }} /></div><div className="detail-info"><div className="eyebrow accent">{product.badge ?? product.category}</div><h1 className="display">{product.name}</h1><div className="detail-price">{money(product.price)}</div><p className="detail-description">{product.description}</p><div className="size-label"><span>Select size</span><Link href="/contact">Size guide</Link></div><div className="size-grid">{product.sizes.map((item) => <button key={item} className={`size-btn ${selectedSize === item ? 'selected' : ''}`} onClick={() => setSize(item)} data-testid={`button-size-${item}`}>{item}</button>)}</div><button className="primary-btn full-btn" onClick={add} data-testid={`button-add-${product.id}`}>{added ? 'Added to bag' : 'Add to bag'} {added ? <Check size={14} style={{ verticalAlign: 'middle' }} /> : <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />}</button><button className={`secondary-btn full-btn ${wishlist.includes(product.id) ? 'saved' : ''}`} onClick={() => onToggleWish(product.id)} data-testid={`button-detail-wishlist-${product.id}`}>{wishlist.includes(product.id) ? 'Saved to wishlist' : 'Save to wishlist'} <Heart size={14} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} style={{ verticalAlign: 'middle' }} /></button><div className="accordions"><div className="accordion">Material & care <Plus size={14} /></div><div className="accordion">Shipping & returns <Plus size={14} /></div><div className="accordion">The DIRACE standard <Plus size={14} /></div></div></div></div></main>;
@@ -145,11 +154,15 @@ function Contact() {
 }
 
 function Wishlist({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
+  const products = useProducts();
+
   const saved = products.filter((product) => wishlist.includes(product.id));
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">WISHLIST</h1></div>{saved.length === 0 ? <EmptyState title="Nothing saved yet." copy="Connect Supabase to sync saved pieces to this space." cta="Explore the collection" href="/shop" icon={<Heart size={24} />} /> : <div className="shop-grid">{saved.map((product) => <ProductCard key={product.id} product={product} isSaved onToggleWish={onToggleWish} />)}</div>}</main>;
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">WISHLIST</h1></div>{saved.length === 0 ? <EmptyState title="Nothing saved yet." copy="Connect the Database to sync saved pieces to this space." cta="Explore the collection" href="/shop" icon={<Heart size={24} />} /> : <div className="shop-grid">{saved.map((product) => <ProductCard key={product.id} product={product} isSaved onToggleWish={onToggleWish} />)}</div>}</main>;
 }
 
 function Cart({ items, onQty, onRemove }: { items: CartItem[]; onQty: (index: number, delta: number) => void; onRemove: (index: number) => void }) {
+  const products = useProducts();
+
   const detailed = items.map((item) => ({ ...item, product: products.find((product) => product.id === item.productId)! }));
   const subtotal = detailed.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Your selection</div><h1 className="display">YOUR BAG <span className="muted" style={{ fontSize: '30%' }}>({items.length})</span></h1></div>{items.length === 0 ? <EmptyState title="Your bag is quiet." copy="The right piece is worth waiting for." cta="Discover the collection" href="/shop" icon={<ShoppingBag size={24} />} /> : <div className="cart-layout"><div>{detailed.map((item, index) => <div className="cart-item" key={`${item.product.id}-${item.size}`}><img src={item.product.image} alt={item.product.alt} /><div><div className="eyebrow accent">{item.product.category}</div><h3>{item.product.name}</h3><div className="muted" style={{ fontSize: 11 }}>Size {item.size}</div><div className="qty-control" style={{ marginTop: 17 }}><button onClick={() => onQty(index, -1)} aria-label="Decrease quantity" data-testid={`button-decrease-${item.product.id}`}><Minus size={12} /></button><span data-testid={`text-quantity-${item.product.id}`}>{item.quantity}</span><button onClick={() => onQty(index, 1)} aria-label="Increase quantity" data-testid={`button-increase-${item.product.id}`}><Plus size={12} /></button></div></div><div style={{ textAlign: 'right' }}><div className="price">{money(item.product.price * item.quantity)}</div><button className="icon-btn" onClick={() => onRemove(index)} aria-label="Remove item" data-testid={`button-remove-${item.product.id}`}><Trash2 size={15} /></button></div></div>)}</div><aside className="cart-summary"><div className="eyebrow accent">Summary</div><div className="summary-row"><span>Subtotal</span><span>{money(subtotal)}</span></div><div className="summary-row"><span>Shipping</span><span>{subtotal >= 250 ? 'Complimentary' : money(18)}</span></div><div className="summary-row summary-total"><span>Total</span><span>{money(subtotal >= 250 ? subtotal : subtotal + 18)}</span></div><Link href="/checkout" className="primary-btn full-btn" style={{ display: 'block', textAlign: 'center' }} data-testid="link-checkout">Proceed to checkout <ArrowRight size={14} style={{ verticalAlign: 'middle' }} /></Link><div className="mono muted" style={{ textAlign: 'center', marginTop: 18, fontSize: 9 }}>Taxes calculated at checkout</div></aside></div>}</main>;
@@ -160,6 +173,7 @@ function EmptyState({ title, copy, cta, href, icon }: { title: string; copy: str
 }
 
 function Checkout({ items }: { items: CartItem[] }) {
+  const products = useProducts();
   const [placed, setPlaced] = useState(false);
   const total = items.reduce((sum, item) => { const product = products.find((p) => p.id === item.productId); return sum + (product?.price ?? 0) * item.quantity; }, 0);
   if (placed) return <main className="page-wrap"><div className="content-narrow"><div className="empty-state"><Check size={28} className="accent" /><h2 className="display">ORDER CONFIRMED.</h2><p>Your order is being prepared with care. A confirmation is on its way to your inbox.</p><Link href="/" className="primary-btn" style={{ display: 'inline-block', marginTop: 26 }}>Return home</Link></div></div></main>;
@@ -168,17 +182,39 @@ function Checkout({ items }: { items: CartItem[] }) {
 }
 
 function SearchPage({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
+  const products = useProducts();
+
   const [term, setTerm] = useState('');
   const result = useMemo(() => products.filter((product) => `${product.name} ${product.category}`.toLowerCase().includes(term.toLowerCase())), [term]);
   return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Search</div><h1 className="display">FIND YOUR<br />FORM.</h1></div><div className="search-box"><Search size={22} strokeWidth={1.5} /><input autoFocus placeholder="Search pieces, categories..." value={term} onChange={(event) => setTerm(event.target.value)} aria-label="Search products" data-testid="input-search" /><span className="mono muted">{result.length} results</span></div>{term && result.length === 0 ? <EmptyState title="No exact match." copy="Try a wider search. The right silhouette may be waiting under another name." cta="View all pieces" href="/shop" icon={<Search size={24} />} /> : <div className="shop-grid">{result.map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div>}</main>;
 }
 
 function Account() {
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">YOUR SPACE.</h1></div><div className="content-narrow"><div className="account-panel"><div className="eyebrow accent">Client account</div><h2 className="display" style={{ fontSize: 45, margin: '18px 0' }}>WELCOME IN.</h2><p className="muted" style={{ fontSize: 13, lineHeight: 1.8 }}>Account access, saved pieces, order history, and faster checkout will be enabled through Supabase Auth.</p><div className="rule" style={{ margin: '25px 0' }} /><div className="empty-state" style={{ padding: '52px 24px' }}><UserRound size={24} className="accent" /><h2 className="display" style={{ fontSize: 32 }}>AUTH NOT CONNECTED.</h2><p>Connect Supabase Auth here when you are ready to enable customer accounts.</p></div></div></div></main>;
+  const [user, setUser] = useState<User | null>(null);
+  
+  useEffect(() => {
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  const login = () => signInWithPopup(auth, googleAuthProvider);
+  const logout = () => signOut(auth);
+
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">YOUR SPACE.</h1></div><div className="content-narrow"><div className="account-panel"><div className="eyebrow accent">Client account</div><h2 className="display" style={{ fontSize: 45, margin: '18px 0' }}>WELCOME IN.</h2><p className="muted" style={{ fontSize: 13, lineHeight: 1.8 }}>Account access, saved pieces, order history, and faster checkout enabled securely.</p><div className="rule" style={{ margin: '25px 0' }} />
+  
+  {user ? (
+    <div>
+      <p>Signed in as <strong>{user.email}</strong></p>
+      <button className="primary-btn" onClick={logout} style={{marginTop: 20}}>Sign Out</button>
+    </div>
+  ) : (
+    <div className="empty-state" style={{ padding: '52px 24px' }}><UserRound size={24} className="accent" /><h2 className="display" style={{ fontSize: 32 }}>AUTH NOT CONNECTED.</h2><p>Sign in with your Google account to access your personal space.</p><button className="primary-btn" onClick={login} style={{marginTop: 20}}>Sign in with Google</button></div>
+  )}
+  
+  </div></div></main>;
 }
 
 function Admin() {
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Studio</div><h1 className="display">CONTROL<br />ROOM.</h1></div><section className="section" style={{ paddingTop: 48 }}><div className="admin-grid"><div className="stat-card"><div className="eyebrow accent">Revenue / 30 days</div><strong>—</strong><span className="mono muted">Supabase data pending</span></div><div className="stat-card"><div className="eyebrow accent">Orders</div><strong>—</strong><span className="mono muted">Supabase data pending</span></div><div className="stat-card"><div className="eyebrow accent">Pieces in studio</div><strong>—</strong><span className="mono muted">Supabase data pending</span></div></div><div className="section-head"><div><div className="eyebrow accent">Live inventory</div><h2 className="display section-title" style={{ fontSize: 52 }}>THE FLOOR</h2></div><button className="secondary-btn" disabled data-testid="button-add-product">Connect Supabase <Plus size={14} style={{ verticalAlign: 'middle' }} /></button></div><div className="empty-state" style={{ padding: '76px 24px' }}><ShoppingBag size={24} className="accent" /><h2 className="display" style={{ fontSize: 38 }}>NO INVENTORY CONNECTED.</h2><p>Product management, orders, customers, and analytics will be powered by your Supabase setup.</p></div></section></main>;
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Studio</div><h1 className="display">CONTROL<br />ROOM.</h1></div><section className="section" style={{ paddingTop: 48 }}><div className="admin-grid"><div className="stat-card"><div className="eyebrow accent">Revenue / 30 days</div><strong>—</strong><span className="mono muted">the Database data pending</span></div><div className="stat-card"><div className="eyebrow accent">Orders</div><strong>—</strong><span className="mono muted">the Database data pending</span></div><div className="stat-card"><div className="eyebrow accent">Pieces in studio</div><strong>—</strong><span className="mono muted">the Database data pending</span></div></div><div className="section-head"><div><div className="eyebrow accent">Live inventory</div><h2 className="display section-title" style={{ fontSize: 52 }}>THE FLOOR</h2></div><button className="secondary-btn" disabled data-testid="button-add-product">Connect the Database <Plus size={14} style={{ verticalAlign: 'middle' }} /></button></div><div className="empty-state" style={{ padding: '76px 24px' }}><ShoppingBag size={24} className="accent" /><h2 className="display" style={{ fontSize: 38 }}>NO INVENTORY CONNECTED.</h2><p>Product management, orders, customers, and analytics will be powered by your the Database setup.</p></div></section></main>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
@@ -205,6 +241,10 @@ function Router({ wishlist, onToggleWish, items, onAdd, onQty, onRemove }: { wis
 }
 
 function App() {
+  const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    fetch("/api/products").then(r => r.json()).then(setProducts).catch(console.error);
+  }, []);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [items, setItems] = useState<CartItem[]>([]);
   const toggleWish = (id: string) => setWishlist((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -212,7 +252,9 @@ function App() {
   const qty = (index: number, delta: number) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0));
   const remove = (index: number) => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Header cartCount={cartCount} wishlistCount={wishlist.length} /><Router wishlist={wishlist} onToggleWish={toggleWish} items={items} onAdd={add} onQty={qty} onRemove={remove} /><Footer /></WouterRouter><Toaster /></TooltipProvider>;
+  return <TooltipProvider>
+<ProductsContext.Provider value={products}><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Header cartCount={cartCount} wishlistCount={wishlist.length} /><Router wishlist={wishlist} onToggleWish={toggleWish} items={items} onAdd={add} onQty={qty} onRemove={remove} /><Footer /></WouterRouter><Toaster /></ProductsContext.Provider>
+</TooltipProvider>;
 }
 
 export default App;
