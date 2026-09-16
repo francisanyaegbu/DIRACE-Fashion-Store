@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -20,15 +19,8 @@ type Product = {
 };
 type CartItem = { productId: string; size: string; quantity: number };
 
-const queryClient = new QueryClient();
-const products: Product[] = [
-  { id: 'axis-coat', name: 'Axis Wool Coat', category: 'Outerwear', price: 390, image: '/dirace-hero.jpg', alt: 'Sculptural black wool coat', badge: 'New arrival', description: 'A sharp, oversized silhouette cut from dense Italian wool. The Axis Coat is built around a strong shoulder and a quiet, considered line.', sizes: ['XS', 'S', 'M', 'L', 'XL'] },
-  { id: 'form-jacket', name: 'Form Cropped Jacket', category: 'Tailoring', price: 245, image: '/dirace-look-01.jpg', alt: 'Charcoal cropped jacket', badge: 'Limited', description: 'Cropped proportion, softened structure. A brushed wool jacket with a generous sleeve and concealed hardware.', sizes: ['XS', 'S', 'M', 'L'] },
-  { id: 'trace-hoodie', name: 'Trace Heavy Hoodie', category: 'Essentials', price: 138, image: '/dirace-look-02.jpg', alt: 'Ink black oversized hoodie', description: 'A dense cotton fleece layer with an oversized fit. Tonal embroidery at the chest, finished with our signature drawcord.', sizes: ['S', 'M', 'L', 'XL'] },
-  { id: 'still-knit', name: 'Still Rib Knit', category: 'Knitwear', price: 164, image: '/dirace-look-03.jpg', alt: 'Ivory rib knit top', badge: 'Essential', description: 'A close rib knit in an understated ivory. Wear it close, or let its long line become the base of the look.', sizes: ['XS', 'S', 'M', 'L'] },
-  { id: 'frame-trouser', name: 'Frame Pleat Trouser', category: 'Tailoring', price: 210, image: '/dirace-look-01.jpg', alt: 'Pleated charcoal trousers', description: 'A wide, fluid trouser with a precise single pleat and a clean break at the ankle.', sizes: ['XS', 'S', 'M', 'L', 'XL'] },
-  { id: 'signal-denim', name: 'Signal Raw Denim', category: 'Denim', price: 178, image: '/dirace-look-03.jpg', alt: 'Black raw denim jeans', description: 'Rigid black denim cut with a long, relaxed leg. It will soften, crease and become entirely yours.', sizes: ['28', '30', '32', '34', '36'] },
-];
+// Supabase will become the source of truth for this catalog.
+const products: Product[] = [];
 
 function money(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
@@ -74,7 +66,7 @@ function Footer() {
       <div className="footer-grid">
         <div><div className="wordmark">DIRACE</div><p className="muted" style={{ maxWidth: 220, fontSize: 12, lineHeight: 1.7, marginTop: 18 }}>Clothing for the considered life. Designed in London. Worn everywhere.</p></div>
         <div><div className="footer-title">Explore</div><div className="footer-links"><Link href="/shop">Shop all</Link><Link href="/collections">Collections</Link><Link href="/about">Our standard</Link><Link href="/contact">Contact</Link></div></div>
-        <div><div className="footer-title">Client service</div><div className="footer-links"><Link href="/contact">Shipping & returns</Link><Link href="/account">Account</Link><Link href="/wishlist">Wishlist</Link><Link href="/admin">Studio login</Link></div></div>
+        <div><div className="footer-title">Client service</div><div className="footer-links"><Link href="/contact">Shipping & returns</Link><Link href="/account">Account</Link><Link href="/wishlist">Wishlist</Link><Link href="/admin">Studio</Link></div></div>
         <div><div className="footer-title">Social</div><div className="footer-links"><a href="https://www.instagram.com" target="_blank" rel="noreferrer">Instagram <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} /></a><a href="https://www.pinterest.com" target="_blank" rel="noreferrer">Pinterest <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} /></a><a href="mailto:studio@dirace.com">Email us <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} /></a></div></div>
       </div>
       <div className="footer-bottom mono"><span>© 2025 DIRACE STUDIO</span><span>MADE TO BE WORN. NOT CONSUMED.</span></div>
@@ -93,6 +85,10 @@ function ProductCard({ product, isSaved, onToggleWish }: { product: Product; isS
   </article>;
 }
 
+function CatalogNotice({ title = 'Catalog awaiting connection.', copy = 'Connect Supabase to load products, collections, and availability into this space.' }: { title?: string; copy?: string }) {
+  return <div className="empty-state"><div className="accent"><ShoppingBag size={24} /></div><h2 className="display">{title}</h2><p>{copy}</p></div>;
+}
+
 function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
   return <main>
     <section className="hero">
@@ -102,7 +98,7 @@ function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
     <div className="marquee"><div className="marquee-track"><span>DIRACE / WEAR WHAT DEFINES YOU</span><span className="dot">·</span><span>DIRACE / THE LATEST DROP</span><span className="dot">·</span><span>DIRACE / WEAR WHAT DEFINES YOU</span><span className="dot">·</span><span>DIRACE / THE LATEST DROP</span></div></div>
     <section className="section page-wrap">
       <div className="section-head"><div><div className="eyebrow accent">01 / The edit</div><h2 className="display section-title">THE LATEST<br />DROP</h2></div><div className="section-copy">A considered collection for a life in motion. New forms, familiar instincts.<br /><Link href="/shop" className="text-link" style={{ marginTop: 22 }} data-testid="link-shop-latest">Shop the edit <ArrowRight size={14} /></Link></div></div>
-      <div className="product-grid">{products.slice(0, 4).map((product, index) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div>
+      {products.length > 0 ? <div className="product-grid">{products.slice(0, 4).map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div> : <CatalogNotice />}
     </section>
     <section className="manifesto"><div className="page-wrap manifesto-inner"><div><div className="eyebrow">A point of view</div><p>We make pieces with a point of view, not a shelf life. Every seam has a reason. Every silhouette leaves room for you.</p></div><h2 className="display">WEAR WHAT<br /><span className="accent">DEFINES YOU.</span></h2></div></section>
     <section className="split-feature"><div className="feature-image" role="img" aria-label="Charcoal tailoring on a steel chair" /><div className="feature-copy"><div><div className="feature-number">02 / THE FORM STUDY</div><h2 className="display">CUT WITH<br />CONVICTION.</h2></div><div><p>Our first study in tailoring: softened structure, severe proportions, and the kind of cloth that remembers where you have been.</p><Link href="/collections" className="text-link" data-testid="link-form-study">View the collection <ArrowRight size={14} /></Link></div></div></section>
@@ -121,16 +117,18 @@ function Shop({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
   const [category, setCategory] = useState('All');
   const categories = ['All', 'Outerwear', 'Tailoring', 'Essentials', 'Knitwear', 'Denim'];
   const filtered = category === 'All' ? products : products.filter((product) => product.category === category);
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Shop</div><h1 className="display">THE COLLECTION</h1></div><div className="shop-toolbar"><span className="mono muted">{filtered.length} pieces</span><div className="filter-row">{categories.map((item) => <button key={item} className={`filter-btn ${category === item ? 'active' : ''}`} onClick={() => setCategory(item)} data-testid={`button-filter-${item.toLowerCase()}`}>{item}</button>)}</div><button className="filter-btn">Sort <ChevronDown size={13} style={{ verticalAlign: 'middle' }} /></button></div><div className="shop-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div></main>;
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Shop</div><h1 className="display">THE COLLECTION</h1></div><div className="shop-toolbar"><span className="mono muted">{filtered.length} pieces</span><div className="filter-row">{categories.map((item) => <button key={item} className={`filter-btn ${category === item ? 'active' : ''}`} onClick={() => setCategory(item)} data-testid={`button-filter-${item.toLowerCase()}`}>{item}</button>)}</div><button className="filter-btn">Sort <ChevronDown size={13} style={{ verticalAlign: 'middle' }} /></button></div>{filtered.length > 0 ? <div className="shop-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div> : <CatalogNotice title="No products loaded." copy="Connect Supabase to populate the DIRACE collection." />}</main>;
 }
 
 function ProductDetail({ wishlist, onToggleWish, onAdd }: { wishlist: string[]; onToggleWish: (id: string) => void; onAdd: (id: string, size: string) => void }) {
   const [, params] = useRoute('/product/:id');
-  const product = products.find((item) => item.id === params?.id) ?? products[0];
-  const [size, setSize] = useState(product.sizes[2] ?? product.sizes[0]);
+  const product = products.find((item) => item.id === params?.id);
+  const [size, setSize] = useState('');
   const [added, setAdded] = useState(false);
-  const add = () => { onAdd(product.id, size); setAdded(true); window.setTimeout(() => setAdded(false), 1800); };
-  return <main className="page-wrap detail-page"><div className="mono muted" style={{ marginBottom: 24 }}><Link href="/shop">Shop</Link> / {product.category} / {product.name}</div><div className="detail-layout"><div className="detail-gallery"><img src={product.image} alt={product.alt} /><img src={product.image} alt={`${product.name} detail`} style={{ filter: 'saturate(.3) contrast(1.08)', transform: 'scaleX(-1)' }} /></div><div className="detail-info"><div className="eyebrow accent">{product.badge ?? product.category}</div><h1 className="display">{product.name}</h1><div className="detail-price">{money(product.price)}</div><p className="detail-description">{product.description}</p><div className="size-label"><span>Select size</span><Link href="/contact">Size guide</Link></div><div className="size-grid">{product.sizes.map((item) => <button key={item} className={`size-btn ${size === item ? 'selected' : ''}`} onClick={() => setSize(item)} data-testid={`button-size-${item}`}>{item}</button>)}</div><button className="primary-btn full-btn" onClick={add} data-testid={`button-add-${product.id}`}>{added ? 'Added to bag' : 'Add to bag'} {added ? <Check size={14} style={{ verticalAlign: 'middle' }} /> : <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />}</button><button className={`secondary-btn full-btn ${wishlist.includes(product.id) ? 'saved' : ''}`} onClick={() => onToggleWish(product.id)} data-testid={`button-detail-wishlist-${product.id}`}>{wishlist.includes(product.id) ? 'Saved to wishlist' : 'Save to wishlist'} <Heart size={14} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} style={{ verticalAlign: 'middle' }} /></button><div className="accordions"><div className="accordion">Material & care <Plus size={14} /></div><div className="accordion">Shipping & returns <Plus size={14} /></div><div className="accordion">The DIRACE standard <Plus size={14} /></div></div></div></div></main>;
+  if (!product) return <main className="page-wrap detail-page"><CatalogNotice title="Product not available." copy="This product will appear when the Supabase catalog is connected." /></main>;
+  const selectedSize = size || product.sizes[2] || product.sizes[0];
+  const add = () => { onAdd(product.id, selectedSize); setAdded(true); window.setTimeout(() => setAdded(false), 1800); };
+  return <main className="page-wrap detail-page"><div className="mono muted" style={{ marginBottom: 24 }}><Link href="/shop">Shop</Link> / {product.category} / {product.name}</div><div className="detail-layout"><div className="detail-gallery"><img src={product.image} alt={product.alt} /><img src={product.image} alt={`${product.name} detail`} style={{ filter: 'saturate(.3) contrast(1.08)', transform: 'scaleX(-1)' }} /></div><div className="detail-info"><div className="eyebrow accent">{product.badge ?? product.category}</div><h1 className="display">{product.name}</h1><div className="detail-price">{money(product.price)}</div><p className="detail-description">{product.description}</p><div className="size-label"><span>Select size</span><Link href="/contact">Size guide</Link></div><div className="size-grid">{product.sizes.map((item) => <button key={item} className={`size-btn ${selectedSize === item ? 'selected' : ''}`} onClick={() => setSize(item)} data-testid={`button-size-${item}`}>{item}</button>)}</div><button className="primary-btn full-btn" onClick={add} data-testid={`button-add-${product.id}`}>{added ? 'Added to bag' : 'Add to bag'} {added ? <Check size={14} style={{ verticalAlign: 'middle' }} /> : <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />}</button><button className={`secondary-btn full-btn ${wishlist.includes(product.id) ? 'saved' : ''}`} onClick={() => onToggleWish(product.id)} data-testid={`button-detail-wishlist-${product.id}`}>{wishlist.includes(product.id) ? 'Saved to wishlist' : 'Save to wishlist'} <Heart size={14} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} style={{ verticalAlign: 'middle' }} /></button><div className="accordions"><div className="accordion">Material & care <Plus size={14} /></div><div className="accordion">Shipping & returns <Plus size={14} /></div><div className="accordion">The DIRACE standard <Plus size={14} /></div></div></div></div></main>;
 }
 
 function Collections() {
@@ -148,7 +146,7 @@ function Contact() {
 
 function Wishlist({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
   const saved = products.filter((product) => wishlist.includes(product.id));
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">WISHLIST</h1></div>{saved.length === 0 ? <EmptyState title="Nothing saved yet." copy="When a piece stays on your mind, keep it here." cta="Explore the collection" href="/shop" icon={<Heart size={24} />} /> : <div className="shop-grid">{saved.map((product) => <ProductCard key={product.id} product={product} isSaved onToggleWish={onToggleWish} />)}</div>}</main>;
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">WISHLIST</h1></div>{saved.length === 0 ? <EmptyState title="Nothing saved yet." copy="Connect Supabase to sync saved pieces to this space." cta="Explore the collection" href="/shop" icon={<Heart size={24} />} /> : <div className="shop-grid">{saved.map((product) => <ProductCard key={product.id} product={product} isSaved onToggleWish={onToggleWish} />)}</div>}</main>;
 }
 
 function Cart({ items, onQty, onRemove }: { items: CartItem[]; onQty: (index: number, delta: number) => void; onRemove: (index: number) => void }) {
@@ -176,12 +174,11 @@ function SearchPage({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWi
 }
 
 function Account() {
-  const [signedIn, setSignedIn] = useState(false);
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">YOUR SPACE.</h1></div><div className="content-narrow">{signedIn ? <div className="account-panel"><div className="eyebrow accent">Welcome back</div><h2 className="display" style={{ fontSize: 45, margin: '18px 0' }}>MORGAN.</h2><p className="muted" style={{ fontSize: 13, lineHeight: 1.8 }}>Your saved pieces, order history and details live here.</p><div className="rule" style={{ margin: '25px 0' }} /><div className="footer-links"><Link href="/wishlist">Saved pieces <ArrowRight size={13} /></Link><span>Order history <span className="muted">No orders yet</span></span><span>Delivery details <span className="muted">Not added</span></span></div><button className="secondary-btn" style={{ marginTop: 30 }} onClick={() => setSignedIn(false)} data-testid="button-signout">Sign out</button></div> : <div className="account-panel"><div className="eyebrow accent">Client account</div><h2 className="display" style={{ fontSize: 45, margin: '18px 0' }}>WELCOME IN.</h2><p className="muted" style={{ fontSize: 13, lineHeight: 1.8 }}>Keep your details close. Track orders, save pieces and make checkout faster.</p><form className="contact-form" style={{ marginTop: 30 }} onSubmit={(event) => { event.preventDefault(); setSignedIn(true); }}><div className="field"><label htmlFor="account-email">Email address</label><input id="account-email" type="email" required data-testid="input-account-email" /></div><div className="field"><label htmlFor="account-password">Password</label><input id="account-password" type="password" required data-testid="input-account-password" /></div><button className="primary-btn" type="submit" data-testid="button-account-signin">Sign in <ArrowRight size={14} style={{ verticalAlign: 'middle' }} /></button></form><button className="filter-btn" style={{ marginTop: 25 }} data-testid="button-forgot-password">Forgot password?</button></div>}</div></main>;
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">YOUR SPACE.</h1></div><div className="content-narrow"><div className="account-panel"><div className="eyebrow accent">Client account</div><h2 className="display" style={{ fontSize: 45, margin: '18px 0' }}>WELCOME IN.</h2><p className="muted" style={{ fontSize: 13, lineHeight: 1.8 }}>Account access, saved pieces, order history, and faster checkout will be enabled through Supabase Auth.</p><div className="rule" style={{ margin: '25px 0' }} /><div className="empty-state" style={{ padding: '52px 24px' }}><UserRound size={24} className="accent" /><h2 className="display" style={{ fontSize: 32 }}>AUTH NOT CONNECTED.</h2><p>Connect Supabase Auth here when you are ready to enable customer accounts.</p></div></div></div></main>;
 }
 
 function Admin() {
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Studio</div><h1 className="display">CONTROL<br />ROOM.</h1></div><section className="section" style={{ paddingTop: 48 }}><div className="admin-grid"><div className="stat-card"><div className="eyebrow accent">Revenue / 30 days</div><strong>$28,460</strong><span className="mono muted">+12.4% from last month</span></div><div className="stat-card"><div className="eyebrow accent">Orders</div><strong>184</strong><span className="mono muted">47 awaiting fulfilment</span></div><div className="stat-card"><div className="eyebrow accent">Pieces in studio</div><strong>06</strong><span className="mono muted">2 low stock alerts</span></div></div><div className="section-head"><div><div className="eyebrow accent">Live inventory</div><h2 className="display section-title" style={{ fontSize: 52 }}>THE FLOOR</h2></div><button className="primary-btn" data-testid="button-add-product">Add product <Plus size={14} style={{ verticalAlign: 'middle' }} /></button></div><div className="table-overflow"><table className="admin-table"><thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td>{product.name}</td><td className="muted">{product.category}</td><td>{money(product.price)}</td><td>{product.id === 'trace-hoodie' ? '08' : '24'}</td><td><span className="accent mono">{product.id === 'trace-hoodie' ? 'Low stock' : 'Live'}</span></td></tr>)}</tbody></table></div></section></main>;
+  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Studio</div><h1 className="display">CONTROL<br />ROOM.</h1></div><section className="section" style={{ paddingTop: 48 }}><div className="admin-grid"><div className="stat-card"><div className="eyebrow accent">Revenue / 30 days</div><strong>—</strong><span className="mono muted">Supabase data pending</span></div><div className="stat-card"><div className="eyebrow accent">Orders</div><strong>—</strong><span className="mono muted">Supabase data pending</span></div><div className="stat-card"><div className="eyebrow accent">Pieces in studio</div><strong>—</strong><span className="mono muted">Supabase data pending</span></div></div><div className="section-head"><div><div className="eyebrow accent">Live inventory</div><h2 className="display section-title" style={{ fontSize: 52 }}>THE FLOOR</h2></div><button className="secondary-btn" disabled data-testid="button-add-product">Connect Supabase <Plus size={14} style={{ verticalAlign: 'middle' }} /></button></div><div className="empty-state" style={{ padding: '76px 24px' }}><ShoppingBag size={24} className="accent" /><h2 className="display" style={{ fontSize: 38 }}>NO INVENTORY CONNECTED.</h2><p>Product management, orders, customers, and analytics will be powered by your Supabase setup.</p></div></section></main>;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
@@ -208,16 +205,14 @@ function Router({ wishlist, onToggleWish, items, onAdd, onQty, onRemove }: { wis
 }
 
 function App() {
-  const [wishlist, setWishlist] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('dirace-wishlist') ?? '[]'); } catch { return []; } });
-  const [items, setItems] = useState<CartItem[]>(() => { try { return JSON.parse(localStorage.getItem('dirace-cart') ?? '[]'); } catch { return []; } });
-  useEffect(() => { localStorage.setItem('dirace-wishlist', JSON.stringify(wishlist)); }, [wishlist]);
-  useEffect(() => { localStorage.setItem('dirace-cart', JSON.stringify(items)); }, [items]);
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [items, setItems] = useState<CartItem[]>([]);
   const toggleWish = (id: string) => setWishlist((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const add = (id: string, size: string) => setItems((current) => { const found = current.find((item) => item.productId === id && item.size === size); return found ? current.map((item) => item === found ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { productId: id, size, quantity: 1 }]; });
   const qty = (index: number, delta: number) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0));
   const remove = (index: number) => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Header cartCount={cartCount} wishlistCount={wishlist.length} /><Router wishlist={wishlist} onToggleWish={toggleWish} items={items} onAdd={add} onQty={qty} onRemove={remove} /><Footer /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Header cartCount={cartCount} wishlistCount={wishlist.length} /><Router wishlist={wishlist} onToggleWish={toggleWish} items={items} onAdd={add} onQty={qty} onRemove={remove} /><Footer /></WouterRouter><Toaster /></TooltipProvider>;
 }
 
 export default App;
