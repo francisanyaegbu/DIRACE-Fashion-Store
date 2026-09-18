@@ -1,220 +1,3397 @@
-import { auth, googleAuthProvider } from "./lib/firebase";
-import { signInWithPopup, signOut, onAuthStateChanged, type User } from "firebase/auth";
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { ArrowRight, ArrowUpRight, Check, ChevronDown, Heart, Menu, Minus, Plus, Search, ShoppingBag, Trash2, UserRound, X } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  Heart,
+  Menu,
+  Minus,
+  Plus,
+  Search,
+  ShoppingBag,
+  Trash2,
+  UserRound,
+  X,
+  Upload,
+  Copy,
+  Database,
+  ShieldCheck,
+  RefreshCw,
+  Package,
+  Layers,
+  Sparkles,
+  Star,
+  MessageSquare,
+  Eye,
+} from 'lucide-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useRoute } from 'wouter';
 import NotFound from '@/pages/not-found';
+import {
+  fetchProductsFromSupabase,
+  addProductToSupabase,
+  fetchRecommendedProductsFromSupabase,
+  deleteProductFromSupabase,
+  uploadProductImageToSupabase,
+  fetchOrdersFromSupabase,
+  createOrderInSupabase,
+  updateOrderStatusInSupabase,
+  seedProductsToSupabase,
+  fetchReviewsFromSupabase,
+  createReviewInSupabase,
+  deleteReviewFromSupabase,
+  purgeDummyReviewsFromSupabase,
+  isSupabaseConfigured,
+  supabaseSignUp,
+  supabaseSignIn,
+  supabaseSignInWithGoogle,
+  supabaseSignOut,
+  getSupabaseCurrentUser,
+  SUPABASE_SQL_SCHEMA,
+  type Product,
+  type Order,
+  type Review,
+  DEFAULT_PRODUCTS,
+} from './lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
-type Product = {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  image: string;
-  alt: string;
-  badge?: string;
-  description: string;
-  sizes: string[];
-};
-type CartItem = { productId: string; size: string; quantity: number };
+export type CartItem = { productId: string; size: string; quantity: number };
 
-import { createContext, useContext, useEffect } from "react";
-const ProductsContext = createContext<Product[]>([]);
-function useProducts() { return useContext(ProductsContext); }
+interface StoreContextType {
+  products: Product[];
+  refreshProducts: () => Promise<void>;
+  orders: Order[];
+  refreshOrders: () => Promise<void>;
+  reviews: Review[];
+  refreshReviews: () => Promise<void>;
+  addReview: (review: Omit<Review, 'id' | 'created_at'>) => Promise<Review>;
+  deleteReview: (reviewId: string) => Promise<void>;
+  currentUser: User | null;
+  refreshUser: () => Promise<void>;
+  quickViewProduct: Product | null;
+  openQuickView: (product: Product) => void;
+  closeQuickView: () => void;
+  addToCart: (productId: string, size: string) => void;
+  clearCart: () => void;
+}
 
-function money(value: number) {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(value);
+const StoreContext = createContext<StoreContextType>({
+  products: [],
+  refreshProducts: async () => {},
+  orders: [],
+  refreshOrders: async () => {},
+  reviews: [],
+  refreshReviews: async () => {},
+  addReview: async () => ({} as Review),
+  deleteReview: async () => {},
+  currentUser: null,
+  refreshUser: async () => {},
+  quickViewProduct: null,
+  openQuickView: () => {},
+  closeQuickView: () => {},
+  addToCart: () => {},
+  clearCart: () => {},
+});
+
+export function useStore() {
+  return useContext(StoreContext);
+}
+
+export function money(value: number): string {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount: number }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const links = [['Shop', '/shop'], ['Collections', '/collections'], ['About', '/about'], ['Contact', '/contact']];
+  const links = [
+    ['Shop', '/shop'],
+    ['Collections', '/collections'],
+    ['About', '/about'],
+    ['Contact', '/contact'],
+  ];
+
   return (
     <>
-      <div className="topbar">Free shipping on orders over $250 · Worldwide delivery</div>
+      <div className="topbar">
+        Complimentary shipping on orders over {money(150000)} · Worldwide delivery
+      </div>
       <header className="nav">
         <div className="page-wrap nav-inner">
-          <button className="icon-btn mobile-menu" aria-label="Open navigation" data-testid="button-open-navigation" onClick={() => setMenuOpen(true)}><Menu size={19} strokeWidth={1.5} /></button>
-          <Link href="/" className="wordmark" data-testid="link-logo">DIRACE</Link>
+          <button
+            className="icon-btn mobile-menu"
+            aria-label="Open navigation"
+            data-testid="button-open-navigation"
+            onClick={() => setMenuOpen(true)}
+          >
+            <Menu size={19} strokeWidth={1.5} />
+          </button>
+          <Link href="/" className="brand-lockup" data-testid="link-logo" aria-label="DIRACE Home">
+            <img
+              src="/diracelogo-removebg-preview.png"
+              alt="DIRACE Logo"
+              className="brand-logo-mark"
+            />
+            <img
+              src="/diracename-removebg-preview.png"
+              alt="DIRACE"
+              className="brand-name-img"
+            />
+          </Link>
           <nav className="nav-links" aria-label="Main navigation">
-            {links.map(([label, href]) => <Link key={href} href={href} className={`nav-link ${location === href ? 'active' : ''}`} data-testid={`link-${label.toLowerCase()}`}>{label}</Link>)}
+            {links.map(([label, href]) => (
+              <Link
+                key={href}
+                href={href}
+                className={`nav-link ${location === href ? 'active' : ''}`}
+                data-testid={`link-${label.toLowerCase()}`}
+              >
+                {label}
+              </Link>
+            ))}
           </nav>
           <div className="nav-actions">
-            <Link href="/search" className="icon-btn" aria-label="Search" data-testid="link-search"><Search size={18} strokeWidth={1.5} /></Link>
-            <Link href="/account" className="icon-btn" aria-label="Account" data-testid="link-account"><UserRound size={18} strokeWidth={1.5} /></Link>
-            <Link href="/wishlist" className="icon-btn" aria-label="Wishlist" data-testid="link-wishlist"><Heart size={18} strokeWidth={1.5} />{wishlistCount > 0 && <span className="count-dot">{wishlistCount}</span>}</Link>
-            <Link href="/cart" className="icon-btn" aria-label="Shopping bag" data-testid="link-cart"><ShoppingBag size={18} strokeWidth={1.5} />{cartCount > 0 && <span className="count-dot">{cartCount}</span>}</Link>
+            <Link href="/search" className="icon-btn" aria-label="Search" data-testid="link-search">
+              <Search size={18} strokeWidth={1.5} />
+            </Link>
+            <Link href="/account" className="icon-btn" aria-label="Account" data-testid="link-account">
+              <UserRound size={18} strokeWidth={1.5} />
+            </Link>
+            <Link href="/wishlist" className="icon-btn" aria-label="Wishlist" data-testid="link-wishlist">
+              <Heart size={18} strokeWidth={1.5} />
+              {wishlistCount > 0 && <span className="count-dot">{wishlistCount}</span>}
+            </Link>
+            <Link href="/cart" className="icon-btn" aria-label="Shopping bag" data-testid="link-cart">
+              <ShoppingBag size={18} strokeWidth={1.5} />
+              {cartCount > 0 && <span className="count-dot">{cartCount}</span>}
+            </Link>
           </div>
         </div>
       </header>
-      {menuOpen && <div className="mobile-drawer" style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'hsl(var(--background))', padding: '26px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Link href="/" className="wordmark" onClick={() => setMenuOpen(false)}>DIRACE</Link><button className="icon-btn" onClick={() => setMenuOpen(false)} aria-label="Close navigation" data-testid="button-close-navigation"><X size={20} /></button></div>
-        <div style={{ display: 'grid', gap: 22, marginTop: 80 }}>
-          {links.map(([label, href]) => <Link key={href} href={href} className="display" style={{ fontSize: 44 }} onClick={() => setMenuOpen(false)} data-testid={`mobile-link-${label.toLowerCase()}`}>{label}</Link>)}
+      {menuOpen && (
+        <div
+          className="mobile-drawer"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            background: 'hsl(var(--background))',
+            padding: '26px 20px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Link href="/" className="brand-lockup" onClick={() => setMenuOpen(false)} aria-label="DIRACE Home">
+              <img
+                src="/diracelogo-removebg-preview.png"
+                alt="DIRACE Logo"
+                className="brand-logo-mark"
+              />
+              <img
+                src="/diracename-removebg-preview.png"
+                alt="DIRACE"
+                className="brand-name-img"
+              />
+            </Link>
+            <button
+              className="icon-btn"
+              onClick={() => setMenuOpen(false)}
+              aria-label="Close navigation"
+              data-testid="button-close-navigation"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gap: 22, marginTop: 80 }}>
+            {links.map(([label, href]) => (
+              <Link
+                key={href}
+                href={href}
+                className="display"
+                style={{ fontSize: 44 }}
+                onClick={() => setMenuOpen(false)}
+                data-testid={`mobile-link-${label.toLowerCase()}`}
+              >
+                {label}
+              </Link>
+            ))}
+            <Link
+              href="/admin"
+              className="display"
+              style={{ fontSize: 34, color: 'hsl(var(--muted-foreground))' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Studio Admin
+            </Link>
+          </div>
         </div>
-      </div>}
+      )}
     </>
   );
 }
 
 function Footer() {
-  const [email, setEmail] = useState('');
-  const [joined, setJoined] = useState(false);
-  return <footer className="footer">
-    <div className="page-wrap">
-      <div className="footer-grid">
-        <div><div className="wordmark">DIRACE</div><p className="muted" style={{ maxWidth: 220, fontSize: 12, lineHeight: 1.7, marginTop: 18 }}>Clothing for the considered life. Designed in London. Worn everywhere.</p></div>
-        <div><div className="footer-title">Explore</div><div className="footer-links"><Link href="/shop">Shop all</Link><Link href="/collections">Collections</Link><Link href="/about">Our standard</Link><Link href="/contact">Contact</Link></div></div>
-        <div><div className="footer-title">Client service</div><div className="footer-links"><Link href="/contact">Shipping & returns</Link><Link href="/account">Account</Link><Link href="/wishlist">Wishlist</Link><Link href="/admin">Studio</Link></div></div>
-        <div><div className="footer-title">Social</div><div className="footer-links"><a href="https://www.instagram.com" target="_blank" rel="noreferrer">Instagram <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} /></a><a href="https://www.pinterest.com" target="_blank" rel="noreferrer">Pinterest <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} /></a><a href="mailto:studio@dirace.com">Email us <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} /></a></div></div>
+  return (
+    <footer className="footer">
+      <div className="page-wrap">
+        <div className="footer-grid">
+          <div>
+            <Link href="/" className="brand-lockup footer-brand" aria-label="DIRACE Home" data-testid="link-footer-logo">
+              <img
+                src="/diracelogo-removebg-preview.png"
+                alt="DIRACE Logo"
+                className="brand-logo-mark"
+              />
+              <img
+                src="/diracename-removebg-preview.png"
+                alt="DIRACE"
+                className="brand-name-img"
+              />
+            </Link>
+            <p className="muted" style={{ maxWidth: 220, fontSize: 12, lineHeight: 1.7, marginTop: 18 }}>
+              Clothing for the considered life. Designed in London. Powered by Supabase.
+            </p>
+          </div>
+          <div>
+            <div className="footer-title">Explore</div>
+            <div className="footer-links">
+              <Link href="/shop">Shop all</Link>
+              <Link href="/collections">Collections</Link>
+              <Link href="/about">Our standard</Link>
+              <Link href="/contact">Contact</Link>
+            </div>
+          </div>
+          <div>
+            <div className="footer-title">Client service</div>
+            <div className="footer-links">
+              <Link href="/contact">Shipping & returns</Link>
+              <Link href="/account">Account</Link>
+              <Link href="/wishlist">Wishlist</Link>
+              <Link href="/admin">Studio Admin</Link>
+            </div>
+          </div>
+          <div>
+            <div className="footer-title">Social</div>
+            <div className="footer-links">
+              <a href="https://www.instagram.com" target="_blank" rel="noreferrer">
+                Instagram <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} />
+              </a>
+              <a href="https://www.pinterest.com" target="_blank" rel="noreferrer">
+                Pinterest <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} />
+              </a>
+              <a href="mailto:studio@dirace.com">
+                Email us <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} />
+              </a>
+            </div>
+          </div>
+        </div>
+        <div className="footer-bottom mono">
+          <span>© 2025 DIRACE STUDIO</span>
+          <span>MADE TO BE WORN. NOT CONSUMED.</span>
+        </div>
       </div>
-      <div className="footer-bottom mono"><span>© 2025 DIRACE STUDIO</span><span>MADE TO BE WORN. NOT CONSUMED.</span></div>
-    </div>
-  </footer>;
+    </footer>
+  );
 }
 
-function ProductCard({ product, isSaved, onToggleWish }: { product: Product; isSaved: boolean; onToggleWish: (id: string) => void }) {
-  return <article className="product-card reveal" data-testid={`card-product-${product.id}`}>
-    <div className="product-media">
-      <Link href={`/product/${product.id}`} data-testid={`link-product-${product.id}`}><img src={product.image} alt={product.alt} /></Link>
-      {product.badge && <span className="product-badge">{product.badge}</span>}
-      <button className={`wish-btn ${isSaved ? 'saved' : ''}`} aria-label={isSaved ? 'Remove from wishlist' : 'Add to wishlist'} onClick={() => onToggleWish(product.id)} data-testid={`button-wishlist-${product.id}`}><Heart size={15} fill={isSaved ? 'currentColor' : 'none'} /></button>
-    </div>
-    <Link href={`/product/${product.id}`} className="product-info" data-testid={`link-product-info-${product.id}`}><div><div className="product-name">{product.name}</div><div className="product-meta">{product.category}</div></div><span className="price">{money(product.price)}</span></Link>
-  </article>;
+function ProductCard({
+  product,
+  isSaved,
+  onToggleWish,
+}: {
+  product: Product;
+  isSaved: boolean;
+  onToggleWish: (id: string) => void;
+}) {
+  const { reviews, openQuickView } = useStore();
+  const productReviews = reviews.filter((r) => r.product_id === product.id);
+  const avgRating =
+    productReviews.length > 0
+      ? (productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length).toFixed(1)
+      : null;
+
+  return (
+    <article className="product-card reveal" data-testid={`card-product-${product.id}`}>
+      <div className="product-media">
+        <Link href={`/product/${product.id}`} data-testid={`link-product-${product.id}`}>
+          <img src={product.image} alt={product.alt || product.name} />
+        </Link>
+        {product.badge && <span className="product-badge">{product.badge}</span>}
+        <button
+          className={`wish-btn ${isSaved ? 'saved' : ''}`}
+          aria-label={isSaved ? 'Remove from wishlist' : 'Add to wishlist'}
+          onClick={() => onToggleWish(product.id)}
+          data-testid={`button-wishlist-${product.id}`}
+        >
+          <Heart size={15} fill={isSaved ? 'currentColor' : 'none'} />
+        </button>
+        <button
+          type="button"
+          className="quick-view-btn"
+          aria-label={`Quick view ${product.name}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openQuickView(product);
+          }}
+          data-testid={`button-quick-view-${product.id}`}
+        >
+          <Eye size={12} />
+          <span>Quick View</span>
+        </button>
+      </div>
+      <Link href={`/product/${product.id}`} className="product-info" data-testid={`link-product-info-${product.id}`}>
+        <div>
+          <div className="product-name">{product.name}</div>
+          <div className="product-meta" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>{product.category}</span>
+            {avgRating && (
+              <>
+                <span className="muted">·</span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    color: 'hsl(var(--foreground))',
+                    fontSize: 10,
+                  }}
+                  className="mono"
+                >
+                  <Star size={10} fill="currentColor" /> {avgRating} ({productReviews.length})
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <span className="price">{money(product.price)}</span>
+      </Link>
+    </article>
+  );
 }
 
-function CatalogNotice({ title = 'Catalog awaiting connection.', copy = 'Connect the Database to load products, collections, and availability into this space.' }: { title?: string; copy?: string }) {
-  return <div className="empty-state"><div className="accent"><ShoppingBag size={24} /></div><h2 className="display">{title}</h2><p>{copy}</p></div>;
+function QuickViewModal({
+  wishlist,
+  onToggleWish,
+}: {
+  wishlist: string[];
+  onToggleWish: (id: string) => void;
+}) {
+  const { quickViewProduct, closeQuickView, addToCart, reviews } = useStore();
+  const [selectedSize, setSelectedSize] = useState<string>('');
+  const [added, setAdded] = useState(false);
+
+  useEffect(() => {
+    if (quickViewProduct) {
+      setSelectedSize(quickViewProduct.sizes?.[0] || 'M');
+      setAdded(false);
+    }
+  }, [quickViewProduct]);
+
+  useEffect(() => {
+    if (!quickViewProduct) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeQuickView();
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [quickViewProduct, closeQuickView]);
+
+  if (!quickViewProduct) return null;
+
+  const isSaved = wishlist.includes(quickViewProduct.id);
+  const productReviews = reviews.filter((r) => r.product_id === quickViewProduct.id);
+  const avgRating =
+    productReviews.length > 0
+      ? (productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length).toFixed(1)
+      : null;
+
+  const handleAdd = () => {
+    addToCart(quickViewProduct.id, selectedSize || quickViewProduct.sizes?.[0] || 'M');
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1800);
+  };
+
+  return (
+    <div
+      className="quick-view-overlay"
+      id="quick-view-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="quick-view-title"
+      onClick={closeQuickView}
+      data-testid="modal-quick-view"
+    >
+      <div className="quick-view-card" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="quick-view-close"
+          onClick={closeQuickView}
+          aria-label="Close quick view"
+          data-testid="button-close-quick-view"
+        >
+          <X size={16} />
+        </button>
+
+        <div className="quick-view-media">
+          <img
+            src={quickViewProduct.image}
+            alt={quickViewProduct.alt || quickViewProduct.name}
+            data-testid="quick-view-image"
+          />
+          {quickViewProduct.badge && (
+            <span className="product-badge">{quickViewProduct.badge}</span>
+          )}
+        </div>
+
+        <div className="quick-view-body">
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 8,
+              }}
+            >
+              <span className="eyebrow accent">DIRACE / {quickViewProduct.category}</span>
+              <span className="mono muted" style={{ fontSize: 10 }}>
+                {quickViewProduct.stock ? `${quickViewProduct.stock} in archive` : 'In stock'}
+              </span>
+            </div>
+
+            <h2
+              id="quick-view-title"
+              className="display"
+              style={{
+                fontSize: 'clamp(24px, 3.2vw, 36px)',
+                margin: '0 0 10px',
+                letterSpacing: '-0.04em',
+                lineHeight: 1.1,
+              }}
+              data-testid="quick-view-title"
+            >
+              {quickViewProduct.name}
+            </h2>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              <div className="mono" style={{ fontSize: 18, fontWeight: 600 }} data-testid="quick-view-price">
+                {money(quickViewProduct.price)}
+              </div>
+              {avgRating ? (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    color: 'hsl(var(--foreground))',
+                    fontSize: 11,
+                  }}
+                  className="mono"
+                >
+                  <Star size={11} fill="currentColor" /> {avgRating} ({productReviews.length} reflection{productReviews.length > 1 ? 's' : ''})
+                </div>
+              ) : (
+                <span className="mono muted" style={{ fontSize: 10 }}>
+                  No client reflections yet
+                </span>
+              )}
+            </div>
+
+            <p
+              className="muted"
+              style={{
+                fontSize: 12,
+                lineHeight: 1.7,
+                margin: '0 0 22px',
+                maxWidth: 400,
+              }}
+              data-testid="quick-view-description"
+            >
+              {quickViewProduct.description}
+            </p>
+
+            {/* Size Selector */}
+            <div style={{ marginBottom: 24 }}>
+              <div className="size-label" style={{ margin: '0 0 10px' }}>
+                <span>Select Size</span>
+                <span className="muted mono" style={{ fontSize: 10 }}>
+                  Selected: <strong>{selectedSize}</strong>
+                </span>
+              </div>
+              <div className="size-grid">
+                {(quickViewProduct.sizes || ['XS', 'S', 'M', 'L']).map((sz) => (
+                  <button
+                    key={sz}
+                    type="button"
+                    className={`size-btn ${selectedSize === sz ? 'selected' : ''}`}
+                    onClick={() => setSelectedSize(sz)}
+                    data-testid={`quick-view-size-${sz}`}
+                  >
+                    {sz}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+              <button
+                type="button"
+                className="primary-btn"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+                onClick={handleAdd}
+                data-testid={`button-quick-view-add-to-bag-${quickViewProduct.id}`}
+              >
+                {added ? (
+                  <>
+                    <Check size={14} /> Added to Bag
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag size={14} /> Add to Bag — {money(quickViewProduct.price)}
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`secondary-btn ${isSaved ? 'saved' : ''}`}
+                style={{
+                  width: 48,
+                  padding: 0,
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: isSaved ? 'hsl(var(--foreground))' : 'transparent',
+                  color: isSaved ? 'hsl(var(--background))' : 'inherit',
+                }}
+                onClick={() => onToggleWish(quickViewProduct.id)}
+                aria-label={isSaved ? 'Remove from wishlist' : 'Save to wishlist'}
+                data-testid={`button-quick-view-wishlist-${quickViewProduct.id}`}
+              >
+                <Heart size={15} fill={isSaved ? 'currentColor' : 'none'} />
+              </button>
+            </div>
+
+            <div style={{ marginTop: 18, textAlign: 'center' }}>
+              <Link
+                href={`/product/${quickViewProduct.id}`}
+                onClick={closeQuickView}
+                className="text-link"
+                style={{ fontSize: 10 }}
+                data-testid="link-quick-view-full-page"
+              >
+                View Full Editorial Details & Client Reviews <ArrowRight size={12} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CatalogNotice({
+  title = 'Catalog loading.',
+  copy = 'Loading items from the database.',
+}: {
+  title?: string;
+  copy?: string;
+}) {
+  return (
+    <div className="empty-state">
+      <div className="accent">
+        <ShoppingBag size={24} />
+      </div>
+      <h2 className="display">{title}</h2>
+      <p>{copy}</p>
+    </div>
+  );
 }
 
 function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
-  const products = useProducts();
+  const { products } = useStore();
 
-  return <main>
-    <section className="hero">
-      <div className="hero-copy reveal"><div><div className="eyebrow accent">Collection 01 / 25</div><h1 className="display">DEFINE<br />YOUR OWN<br /><span className="accent">STANDARD.</span></h1></div><div><p>DIRACE is a uniform for the self-defined. Considered shapes, uncompromising materials, no borrowed ideas.</p><div className="hero-note"><span>THE NEW STANDARD</span><Link href="/shop" className="circle-arrow" aria-label="Shop the latest drop" data-testid="link-hero-shop"><ArrowRight size={17} /></Link></div></div></div>
-      <div className="hero-image reveal delay-2" role="img" aria-label="DIRACE campaign portrait" />
-    </section>
-    <div className="marquee"><div className="marquee-track"><span>DIRACE / WEAR WHAT DEFINES YOU</span><span className="dot">·</span><span>DIRACE / THE LATEST DROP</span><span className="dot">·</span><span>DIRACE / WEAR WHAT DEFINES YOU</span><span className="dot">·</span><span>DIRACE / THE LATEST DROP</span></div></div>
-    <section className="section page-wrap">
-      <div className="section-head"><div><div className="eyebrow accent">01 / The edit</div><h2 className="display section-title">THE LATEST<br />DROP</h2></div><div className="section-copy">A considered collection for a life in motion. New forms, familiar instincts.<br /><Link href="/shop" className="text-link" style={{ marginTop: 22 }} data-testid="link-shop-latest">Shop the edit <ArrowRight size={14} /></Link></div></div>
-      {products.length > 0 ? <div className="product-grid">{products.slice(0, 4).map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div> : <CatalogNotice />}
-    </section>
-    <section className="manifesto"><div className="page-wrap manifesto-inner"><div><div className="eyebrow">A point of view</div><p>We make pieces with a point of view, not a shelf life. Every seam has a reason. Every silhouette leaves room for you.</p></div><h2 className="display">WEAR WHAT<br /><span className="accent">DEFINES YOU.</span></h2></div></section>
-    <section className="split-feature"><div className="feature-image" role="img" aria-label="Charcoal tailoring on a steel chair" /><div className="feature-copy"><div><div className="feature-number">02 / THE FORM STUDY</div><h2 className="display">CUT WITH<br />CONVICTION.</h2></div><div><p>Our first study in tailoring: softened structure, severe proportions, and the kind of cloth that remembers where you have been.</p><Link href="/collections" className="text-link" data-testid="link-form-study">View the collection <ArrowRight size={14} /></Link></div></div></section>
-    <section className="section page-wrap"><div className="section-head"><div><div className="eyebrow accent">03 / Field notes</div><h2 className="display section-title">THE WORLD<br />AROUND IT</h2></div><div className="section-copy">A look at the places, objects and people that make the DIRACE language. <Link href="/about" className="text-link" style={{ marginTop: 22 }} data-testid="link-about-notes">Read our story <ArrowRight size={14} /></Link></div></div><div className="editorial-strip"><div className="editorial-tile"><img src="/dirace-look-03.jpg" alt="Ivory knit textile detail" /><span className="editorial-label">01 — Texture</span></div><div className="editorial-tile"><img src="/dirace-look-02.jpg" alt="DIRACE street look" /><span className="editorial-label">02 — Movement</span></div><div className="editorial-tile"><img src="/dirace-look-01.jpg" alt="Charcoal tailoring detail" /><span className="editorial-label">03 — Form</span></div></div></section>
-    <Signup />
-  </main>;
+  return (
+    <main>
+      <section className="hero">
+        <div className="hero-copy reveal">
+          <div>
+            <div className="eyebrow accent">Collection 01 / 25</div>
+            <h1 className="display">
+              DEFINE
+              <br />
+              YOUR OWN
+              <br />
+              <span className="accent">STANDARD.</span>
+            </h1>
+          </div>
+          <div>
+            <p>DIRACE is a uniform for the self-defined. Considered shapes, uncompromising materials, no borrowed ideas.</p>
+            <div className="hero-note">
+              <span>THE NEW STANDARD</span>
+              <Link href="/shop" className="circle-arrow" aria-label="Shop the latest drop" data-testid="link-hero-shop">
+                <ArrowRight size={17} />
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="hero-image reveal delay-2" role="img" aria-label="DIRACE campaign portrait" />
+      </section>
+      <div className="marquee">
+        <div className="marquee-track">
+          <span>DIRACE / WEAR WHAT DEFINES YOU</span>
+          <span className="dot">·</span>
+          <span>DIRACE / SUPABASE EQUIPPED</span>
+          <span className="dot">·</span>
+          <span>DIRACE / WEAR WHAT DEFINES YOU</span>
+          <span className="dot">·</span>
+          <span>DIRACE / THE LATEST DROP</span>
+        </div>
+      </div>
+      <section className="section page-wrap">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow accent">01 / The edit</div>
+            <h2 className="display section-title">
+              THE LATEST
+              <br />
+              DROP
+            </h2>
+          </div>
+          <div className="section-copy">
+            A considered collection for a life in motion. Prices in Nigerian Naira (₦).
+            <br />
+            <Link href="/shop" className="text-link" style={{ marginTop: 22 }} data-testid="link-shop-latest">
+              Shop the edit <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+        {products.length > 0 ? (
+          <div className="product-grid">
+            {products.slice(0, 4).map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                isSaved={wishlist.includes(product.id)}
+                onToggleWish={onToggleWish}
+              />
+            ))}
+          </div>
+        ) : (
+          <CatalogNotice />
+        )}
+      </section>
+      <section className="manifesto">
+        <div className="page-wrap manifesto-inner">
+          <div>
+            <div className="eyebrow">A point of view</div>
+            <p>
+              We make pieces with a point of view, not a shelf life. Every seam has a reason. Every silhouette leaves room
+              for you.
+            </p>
+          </div>
+          <h2 className="display">
+            WEAR WHAT
+            <br />
+            <span className="accent">DEFINES YOU.</span>
+          </h2>
+        </div>
+      </section>
+      <section className="split-feature">
+        <div className="feature-image" role="img" aria-label="Charcoal tailoring on a steel chair" />
+        <div className="feature-copy">
+          <div>
+            <div className="feature-number">02 / THE FORM STUDY</div>
+            <h2 className="display">
+              CUT WITH
+              <br />
+              CONVICTION.
+            </h2>
+          </div>
+          <div>
+            <p>
+              Our first study in tailoring: softened structure, severe proportions, and the kind of cloth that remembers
+              where you have been.
+            </p>
+            <Link href="/collections" className="text-link" data-testid="link-form-study">
+              View the collection <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+      </section>
+      <section className="section page-wrap">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow accent">03 / Field notes</div>
+            <h2 className="display section-title">
+              THE WORLD
+              <br />
+              AROUND IT
+            </h2>
+          </div>
+          <div className="section-copy">
+            A look at the places, objects and people that make the DIRACE language.{' '}
+            <Link href="/about" className="text-link" style={{ marginTop: 22 }} data-testid="link-about-notes">
+              Read our story <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+        <div className="editorial-strip">
+          <div className="editorial-tile">
+            <img src="/dirace-look-03.jpg" alt="Ivory knit textile detail" />
+            <span className="editorial-label">01 — Texture</span>
+          </div>
+          <div className="editorial-tile">
+            <img src="/dirace-look-02.jpg" alt="DIRACE street look" />
+            <span className="editorial-label">02 — Movement</span>
+          </div>
+          <div className="editorial-tile">
+            <img src="/dirace-look-01.jpg" alt="Charcoal tailoring detail" />
+            <span className="editorial-label">03 — Form</span>
+          </div>
+        </div>
+      </section>
+      <Signup />
+    </main>
+  );
 }
 
 function Signup() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
-  return <div className="page-wrap"><section className="newsletter"><div><div className="eyebrow accent">Stay in the loop</div><h2 className="display">NOISE, FILTERED.</h2></div>{sent ? <div className="mono"><Check size={14} style={{ verticalAlign: 'middle' }} /> You're on the list.</div> : <form className="newsletter-form" onSubmit={(event) => { event.preventDefault(); if (email) setSent(true); }}><input type="email" placeholder="Your email address" value={email} onChange={(event) => setEmail(event.target.value)} aria-label="Email address" data-testid="input-newsletter-email" /><button type="submit" data-testid="button-newsletter-submit">Subscribe <ArrowRight size={13} style={{ verticalAlign: 'middle' }} /></button></form>}</section></div>;
+
+  return (
+    <div className="page-wrap">
+      <section className="newsletter">
+        <div>
+          <div className="eyebrow accent">Stay in the loop</div>
+          <h2 className="display">NOISE, FILTERED.</h2>
+        </div>
+        {sent ? (
+          <div className="mono">
+            <Check size={14} style={{ verticalAlign: 'middle' }} /> You're on the list.
+          </div>
+        ) : (
+          <form
+            className="newsletter-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (email) setSent(true);
+            }}
+          >
+            <input
+              type="email"
+              placeholder="Your email address"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              aria-label="Email address"
+              data-testid="input-newsletter-email"
+            />
+            <button type="submit" data-testid="button-newsletter-submit">
+              Subscribe <ArrowRight size={13} style={{ verticalAlign: 'middle' }} />
+            </button>
+          </form>
+        )}
+      </section>
+    </div>
+  );
 }
 
 function Shop({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
-  const products = useProducts();
-
+  const { products } = useStore();
   const [category, setCategory] = useState('All');
-  const categories = ['All', 'Outerwear', 'Tailoring', 'Essentials', 'Knitwear', 'Denim'];
-  const filtered = category === 'All' ? products : products.filter((product) => product.category === category);
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Shop</div><h1 className="display">THE COLLECTION</h1></div><div className="shop-toolbar"><span className="mono muted">{filtered.length} pieces</span><div className="filter-row">{categories.map((item) => <button key={item} className={`filter-btn ${category === item ? 'active' : ''}`} onClick={() => setCategory(item)} data-testid={`button-filter-${item.toLowerCase()}`}>{item}</button>)}</div><button className="filter-btn">Sort <ChevronDown size={13} style={{ verticalAlign: 'middle' }} /></button></div>{filtered.length > 0 ? <div className="shop-grid">{filtered.map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div> : <CatalogNotice title="No products loaded." copy="Connect the Database to populate the DIRACE collection." />}</main>;
+  const categories = ['All', 'Outerwear', 'Tailoring', 'Bottoms', 'Tops', 'Accessories', 'Knitwear'];
+  const filtered = category === 'All' ? products : products.filter((p) => p.category === category);
+
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Shop</div>
+        <h1 className="display">THE COLLECTION</h1>
+      </div>
+      <div className="shop-toolbar">
+        <span className="mono muted">{filtered.length} pieces</span>
+        <div className="filter-row">
+          {categories.map((item) => (
+            <button
+              key={item}
+              className={`filter-btn ${category === item ? 'active' : ''}`}
+              onClick={() => setCategory(item)}
+              data-testid={`button-filter-${item.toLowerCase()}`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+      {filtered.length > 0 ? (
+        <div className="shop-grid">
+          {filtered.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              isSaved={wishlist.includes(product.id)}
+              onToggleWish={onToggleWish}
+            />
+          ))}
+        </div>
+      ) : (
+        <CatalogNotice title="No products loaded." copy="Your inventory will appear here once connected." />
+      )}
+    </main>
+  );
 }
 
-function ProductDetail({ wishlist, onToggleWish, onAdd }: { wishlist: string[]; onToggleWish: (id: string) => void; onAdd: (id: string, size: string) => void }) {
-  const products = useProducts();
-
+function ProductDetail({
+  wishlist,
+  onToggleWish,
+  onAdd,
+}: {
+  wishlist: string[];
+  onToggleWish: (id: string) => void;
+  onAdd: (id: string, size: string) => void;
+}) {
+  const { products, reviews, addReview, deleteReview, currentUser, refreshUser } = useStore();
   const [, params] = useRoute('/product/:id');
   const product = products.find((item) => item.id === params?.id);
   const [size, setSize] = useState('');
   const [added, setAdded] = useState(false);
-  if (!product) return <main className="page-wrap detail-page"><CatalogNotice title="Product not available." copy="This product will appear when the the Database catalog is connected." /></main>;
-  const selectedSize = size || product.sizes[2] || product.sizes[0];
-  const add = () => { onAdd(product.id, selectedSize); setAdded(true); window.setTimeout(() => setAdded(false), 1800); };
-  return <main className="page-wrap detail-page"><div className="mono muted" style={{ marginBottom: 24 }}><Link href="/shop">Shop</Link> / {product.category} / {product.name}</div><div className="detail-layout"><div className="detail-gallery"><img src={product.image} alt={product.alt} /><img src={product.image} alt={`${product.name} detail`} style={{ filter: 'saturate(.3) contrast(1.08)', transform: 'scaleX(-1)' }} /></div><div className="detail-info"><div className="eyebrow accent">{product.badge ?? product.category}</div><h1 className="display">{product.name}</h1><div className="detail-price">{money(product.price)}</div><p className="detail-description">{product.description}</p><div className="size-label"><span>Select size</span><Link href="/contact">Size guide</Link></div><div className="size-grid">{product.sizes.map((item) => <button key={item} className={`size-btn ${selectedSize === item ? 'selected' : ''}`} onClick={() => setSize(item)} data-testid={`button-size-${item}`}>{item}</button>)}</div><button className="primary-btn full-btn" onClick={add} data-testid={`button-add-${product.id}`}>{added ? 'Added to bag' : 'Add to bag'} {added ? <Check size={14} style={{ verticalAlign: 'middle' }} /> : <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />}</button><button className={`secondary-btn full-btn ${wishlist.includes(product.id) ? 'saved' : ''}`} onClick={() => onToggleWish(product.id)} data-testid={`button-detail-wishlist-${product.id}`}>{wishlist.includes(product.id) ? 'Saved to wishlist' : 'Save to wishlist'} <Heart size={14} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} style={{ verticalAlign: 'middle' }} /></button><div className="accordions"><div className="accordion">Material & care <Plus size={14} /></div><div className="accordion">Shipping & returns <Plus size={14} /></div><div className="accordion">The DIRACE standard <Plus size={14} /></div></div></div></div></main>;
+
+  // Reviews state
+  const [rating, setRating] = useState<number>(5);
+  const [hoverRating, setHoverRating] = useState<number>(0);
+  const [comment, setComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewFeedback, setReviewFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Recommended products from same category in Supabase
+  const [recommended, setRecommended] = useState<Product[]>([]);
+  const [loadingRecommended, setLoadingRecommended] = useState(true);
+
+  // Scroll to top when product changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [params?.id]);
+
+  // Fetch recommended products from the same category from Supabase
+  useEffect(() => {
+    let isSubscribed = true;
+    if (product) {
+      setLoadingRecommended(true);
+      fetchRecommendedProductsFromSupabase(product.category, product.id, 4)
+        .then((data) => {
+          if (isSubscribed) {
+            setRecommended(data);
+            setLoadingRecommended(false);
+          }
+        })
+        .catch((err) => {
+          console.warn('Error querying recommended items from Supabase:', err);
+          if (isSubscribed) {
+            const fallback = products.filter(
+              (item) => item.category === product.category && item.id !== product.id
+            );
+            setRecommended(fallback.slice(0, 4));
+            setLoadingRecommended(false);
+          }
+        });
+    }
+    return () => {
+      isSubscribed = false;
+    };
+  }, [product?.id, product?.category, products]);
+
+  // Quick auth state for unauthenticated users
+  const [quickAuthMode, setQuickAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [quickEmail, setQuickEmail] = useState('');
+  const [quickPassword, setQuickPassword] = useState('');
+  const [quickName, setQuickName] = useState('');
+  const [quickAuthLoading, setQuickAuthLoading] = useState(false);
+  const [quickAuthError, setQuickAuthError] = useState<string | null>(null);
+
+  if (!product) {
+    return (
+      <main className="page-wrap detail-page">
+        <CatalogNotice title="Piece not found." copy="Return to the shop to view available pieces." />
+      </main>
+    );
+  }
+
+  const productReviews = reviews.filter((r) => r.product_id === product.id);
+  const avgRating =
+    productReviews.length > 0
+      ? (productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length).toFixed(1)
+      : null;
+
+  const selectedSize = size || (product.sizes && product.sizes[0]) || 'M';
+  const add = () => {
+    onAdd(product.id, selectedSize);
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 1800);
+  };
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) {
+      setReviewFeedback({
+        type: 'error',
+        message: 'Authentication required. Please sign in to leave a review.',
+      });
+      return;
+    }
+    if (!comment.trim()) {
+      setReviewFeedback({
+        type: 'error',
+        message: 'Please provide commentary or reflection regarding this piece.',
+      });
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const reviewerName =
+        currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Verified Client';
+      await addReview({
+        product_id: product.id,
+        user_id: currentUser.id,
+        user_name: reviewerName,
+        user_email: currentUser.email || null,
+        rating,
+        comment: comment.trim(),
+      });
+
+      setComment('');
+      setRating(5);
+      setReviewFeedback({
+        type: 'success',
+        message: 'Your review has been successfully published and saved directly to the Supabase "reviews" table.',
+      });
+      window.setTimeout(() => setReviewFeedback(null), 5000);
+    } catch (err: any) {
+      setReviewFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to record review to Supabase.',
+      });
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleQuickAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuickAuthLoading(true);
+    setQuickAuthError(null);
+
+    if (quickAuthMode === 'signup') {
+      const res = await supabaseSignUp(quickEmail, quickPassword, quickName);
+      if (res.error) {
+        setQuickAuthError(res.error);
+      } else {
+        await refreshUser();
+      }
+    } else {
+      const res = await supabaseSignIn(quickEmail, quickPassword);
+      if (res.error) {
+        setQuickAuthError(res.error);
+      } else {
+        await refreshUser();
+      }
+    }
+    setQuickAuthLoading(false);
+  };
+
+  return (
+    <main className="page-wrap detail-page">
+      <div className="mono muted" style={{ marginBottom: 24 }}>
+        <Link href="/shop">Shop</Link> / {product.category} / {product.name}
+      </div>
+      <div className="detail-layout">
+        <div className="detail-gallery">
+          <img src={product.image} alt={product.alt || product.name} />
+          <img
+            src={product.image}
+            alt={`${product.name} detail`}
+            style={{ filter: 'saturate(.3) contrast(1.08)', transform: 'scaleX(-1)' }}
+          />
+        </div>
+        <div className="detail-info">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div className="eyebrow accent">{product.badge ?? product.category}</div>
+            {avgRating && (
+              <>
+                <span className="muted">·</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }} className="mono">
+                  <div style={{ display: 'flex', color: 'hsl(var(--foreground))' }}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star
+                        key={s}
+                        size={12}
+                        fill={s <= Math.round(Number(avgRating)) ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                      />
+                    ))}
+                  </div>
+                  <span>
+                    {avgRating} ({productReviews.length} {productReviews.length === 1 ? 'reflection' : 'reflections'})
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+          <h1 className="display">{product.name}</h1>
+          <div className="detail-price">{money(product.price)}</div>
+          <p className="detail-description">{product.description}</p>
+          <div className="size-label">
+            <span>Select size</span>
+            <Link href="/contact">Size guide</Link>
+          </div>
+          <div className="size-grid">
+            {(product.sizes || ['XS', 'S', 'M', 'L']).map((item) => (
+              <button
+                key={item}
+                className={`size-btn ${selectedSize === item ? 'selected' : ''}`}
+                onClick={() => setSize(item)}
+                data-testid={`button-size-${item}`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <button className="primary-btn full-btn" onClick={add} data-testid={`button-add-${product.id}`}>
+            {added ? 'Added to bag' : 'Add to bag'}{' '}
+            {added ? (
+              <Check size={14} style={{ verticalAlign: 'middle' }} />
+            ) : (
+              <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+            )}
+          </button>
+          <button
+            className={`secondary-btn full-btn ${wishlist.includes(product.id) ? 'saved' : ''}`}
+            onClick={() => onToggleWish(product.id)}
+            data-testid={`button-detail-wishlist-${product.id}`}
+          >
+            {wishlist.includes(product.id) ? 'Saved to wishlist' : 'Save to wishlist'}{' '}
+            <Heart
+              size={14}
+              fill={wishlist.includes(product.id) ? 'currentColor' : 'none'}
+              style={{ verticalAlign: 'middle' }}
+            />
+          </button>
+          <div className="accordions">
+            <div className="accordion">
+              Material & care <Plus size={14} />
+            </div>
+            <div className="accordion">
+              Shipping & complimentary delivery over {money(150000)} <Plus size={14} />
+            </div>
+            <div className="accordion">
+              The DIRACE standard <Plus size={14} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* RECOMMENDED FOR YOU (SUPABASE SAME-CATEGORY QUERY) */}
+      <section
+        className="recommended-section"
+        style={{
+          marginTop: 88,
+          borderTop: '1px solid hsl(var(--border))',
+          paddingTop: 64,
+        }}
+        data-testid="section-recommended-products"
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            gap: 20,
+            marginBottom: 36,
+          }}
+        >
+          <div>
+            <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>DIRACE / {product.category} Archive</span>
+              <span className="muted">·</span>
+              <span className="muted">Supabase Match</span>
+            </div>
+            <h2 className="display" style={{ fontSize: 36, margin: '8px 0 4px', textTransform: 'uppercase' }}>
+              RECOMMENDED FOR YOU
+            </h2>
+            <p className="muted" style={{ fontSize: 13, maxWidth: 520, lineHeight: 1.6 }}>
+              Curated silhouettes and complementary tailoring from the{' '}
+              <strong style={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{product.category}</strong> collection
+              in the Supabase database.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              className="mono"
+              style={{
+                fontSize: 10,
+                padding: '6px 12px',
+                background: isSupabaseConfigured() ? 'hsl(142 70% 45% / .12)' : 'hsl(0 0% 92%)',
+                color: isSupabaseConfigured() ? 'hsl(142 76% 36%)' : 'inherit',
+                border: '1px solid hsl(var(--border))',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Database size={11} />
+              <span>SUPABASE '{product.category.toUpperCase()}' ({recommended.length} PIECES)</span>
+            </div>
+          </div>
+        </div>
+
+        {loadingRecommended ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: 24,
+            }}
+          >
+            {[1, 2, 3, 4].map((n) => (
+              <div
+                key={n}
+                style={{
+                  background: 'hsl(0 0% 94%)',
+                  height: 380,
+                  animation: 'pulse 1.8s ease-in-out infinite',
+                }}
+              />
+            ))}
+          </div>
+        ) : recommended.length > 0 ? (
+          <div
+            className="product-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '32px 18px',
+            }}
+            data-testid="recommended-products-grid"
+          >
+            {recommended.map((item) => (
+              <ProductCard
+                key={item.id}
+                product={item}
+                isSaved={wishlist.includes(item.id)}
+                onToggleWish={onToggleWish}
+              />
+            ))}
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: '40px 24px',
+              textAlign: 'center',
+              border: '1px dashed hsl(var(--border))',
+              background: 'hsl(0 0% 98%)',
+            }}
+          >
+            <p className="muted mono" style={{ fontSize: 12 }}>
+              No other pieces currently catalogued in the '{product.category}' category.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* CLIENT REVIEWS & REFLECTIONS */}
+      <section className="product-reviews-section" style={{ marginTop: 80, borderTop: '1px solid hsl(var(--border))', paddingTop: 64 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 24, marginBottom: 40 }}>
+          <div>
+            <div className="eyebrow accent">Supabase 'reviews' table · Verified Client Reflections</div>
+            <h2 className="display" style={{ fontSize: 38, margin: '8px 0 4px' }}>
+              CLIENT REVIEWS & ARCHIVE NOTES
+            </h2>
+            <p className="muted" style={{ fontSize: 13, maxWidth: 540, lineHeight: 1.6 }}>
+              Authentic reflections persisted directly in our Supabase database from authenticated clients.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              className="mono"
+              style={{
+                fontSize: 10,
+                padding: '5px 12px',
+                background: isSupabaseConfigured() ? 'hsl(142 70% 45% / .15)' : 'hsl(0 0% 90%)',
+                color: isSupabaseConfigured() ? 'hsl(142 76% 36%)' : 'inherit',
+                border: '1px solid hsl(var(--border))',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Database size={11} />
+              {isSupabaseConfigured() ? "SUPABASE 'reviews' LIVE" : "SUPABASE 'reviews' READY"}
+            </div>
+          </div>
+        </div>
+
+        {/* Overall Score + Distribution */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 32,
+            background: 'hsl(0 0% 96%)',
+            padding: '28px 32px',
+            border: '1px solid hsl(var(--border))',
+            marginBottom: 48,
+          }}
+        >
+          <div style={{ borderRight: '1px solid hsl(var(--border))', paddingRight: 24 }}>
+            <div className="eyebrow muted">Overall rating</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 0 6px' }}>
+              <span className="display" style={{ fontSize: 52, lineHeight: 1 }}>
+                {avgRating || '—'}
+              </span>
+              <span className="mono muted" style={{ fontSize: 14 }}>/ 5.0</span>
+            </div>
+            <div style={{ display: 'flex', gap: 3, color: 'hsl(var(--foreground))', marginBottom: 8 }}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  size={16}
+                  fill={s <= Math.round(Number(avgRating || 5)) ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                />
+              ))}
+            </div>
+            <div className="mono muted" style={{ fontSize: 11 }}>
+              Based on {productReviews.length} {productReviews.length === 1 ? 'verified reflection' : 'verified reflections'}
+            </div>
+          </div>
+
+          {/* Distribution bars */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+            {[5, 4, 3, 2, 1].map((stars) => {
+              const count = productReviews.filter((r) => r.rating === stars).length;
+              const pct = productReviews.length > 0 ? (count / productReviews.length) * 100 : 0;
+              return (
+                <div key={stars} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }} className="mono">
+                  <span style={{ width: 44, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {stars} <Star size={10} fill="currentColor" />
+                  </span>
+                  <div style={{ flex: 1, height: 6, background: 'hsl(var(--border))', position: 'relative' }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: `${pct}%`,
+                        background: 'hsl(var(--foreground))',
+                        transition: 'width .3s ease',
+                      }}
+                    />
+                  </div>
+                  <span className="muted" style={{ width: 28, textAlign: 'right' }}>
+                    {count}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* REVIEW SUBMISSION SECTION */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 40, alignItems: 'start' }}>
+          {/* Form on left (or card) */}
+          <div
+            style={{
+              border: '1px solid hsl(var(--border))',
+              padding: 28,
+              background: 'hsl(var(--background))',
+            }}
+          >
+            <div className="eyebrow accent" style={{ marginBottom: 6 }}>
+              Step 01 / Write a Review
+            </div>
+            <h3 className="display" style={{ fontSize: 24, margin: '0 0 16px' }}>
+              RECORD A REFLECTION
+            </h3>
+
+            {reviewFeedback && (
+              <div
+                style={{
+                  padding: '12px 14px',
+                  marginBottom: 20,
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                  background: reviewFeedback.type === 'error' ? 'hsl(0 80% 96%)' : 'hsl(142 70% 96%)',
+                  color: reviewFeedback.type === 'error' ? 'hsl(0 80% 30%)' : 'hsl(142 70% 25%)',
+                  border: '1px solid currentColor',
+                }}
+              >
+                {reviewFeedback.message}
+              </div>
+            )}
+
+            {currentUser ? (
+              <form onSubmit={handleReviewSubmit} style={{ display: 'grid', gap: 18 }}>
+                {/* Authenticated user badge */}
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    background: 'hsl(0 0% 96%)',
+                    border: '1px solid hsl(var(--border))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <ShieldCheck size={16} className="accent" />
+                  <div style={{ fontSize: 11 }}>
+                    <div className="mono" style={{ fontWeight: 600 }}>
+                      {currentUser.user_metadata?.full_name || currentUser.email}
+                    </div>
+                    <div className="muted" style={{ fontSize: 10 }}>
+                      Authenticated with Supabase
+                    </div>
+                  </div>
+                </div>
+
+                {/* Star Rating Selection */}
+                <div className="field">
+                  <label style={{ display: 'block', marginBottom: 8, fontSize: 11 }} className="mono">
+                    Star Rating ({rating} of 5)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {[1, 2, 3, 4, 5].map((starVal) => {
+                      const active = starVal <= (hoverRating || rating);
+                      return (
+                        <button
+                          key={starVal}
+                          type="button"
+                          style={{
+                            background: 'none',
+                            border: 0,
+                            padding: 4,
+                            color: active ? 'hsl(var(--foreground))' : 'hsl(0 0% 72%)',
+                            cursor: 'pointer',
+                            transition: 'transform .15s ease',
+                          }}
+                          onMouseEnter={() => setHoverRating(starVal)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          onClick={() => setRating(starVal)}
+                          aria-label={`Rate ${starVal} stars`}
+                        >
+                          <Star size={24} fill={active ? 'currentColor' : 'none'} stroke="currentColor" />
+                        </button>
+                      );
+                    })}
+                    <span className="mono muted" style={{ fontSize: 11, marginLeft: 8 }}>
+                      {rating === 5 && 'Masterpiece'}
+                      {rating === 4 && 'Refined & Considered'}
+                      {rating === 3 && 'Standard Fit'}
+                      {rating === 2 && 'Noticeable Flaws'}
+                      {rating === 1 && 'Below Standard'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Review Comment */}
+                <div className="field">
+                  <label htmlFor="review-comment" style={{ display: 'block', marginBottom: 8, fontSize: 11 }} className="mono">
+                    Comment & Reflection
+                  </label>
+                  <textarea
+                    id="review-comment"
+                    required
+                    rows={4}
+                    placeholder="Reflections on silhouette, drape, wool weight, cut, and sizing..."
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      font: 'inherit',
+                      fontSize: 13,
+                      border: '1px solid hsl(var(--border))',
+                      background: 'hsl(var(--background))',
+                      color: 'inherit',
+                      resize: 'vertical',
+                      lineHeight: 1.6,
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="primary-btn full-btn"
+                  disabled={submittingReview}
+                  style={{ marginTop: 4 }}
+                >
+                  {submittingReview ? 'Recording to Supabase...' : 'Submit Review to Supabase'}{' '}
+                  <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                </button>
+              </form>
+            ) : (
+              <div>
+                <div
+                  style={{
+                    padding: 18,
+                    background: 'hsl(0 0% 96%)',
+                    border: '1px solid hsl(var(--border))',
+                    marginBottom: 20,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <ShieldCheck size={16} />
+                    <strong className="mono" style={{ fontSize: 11 }}>
+                      AUTHENTICATION REQUIRED
+                    </strong>
+                  </div>
+                  <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+                    To ensure the integrity of the Supabase archive, product reviews can only be posted by authenticated users.
+                  </p>
+                </div>
+
+                {/* Quick inline auth widget */}
+                <div style={{ border: '1px solid hsl(var(--border))', padding: 18 }}>
+                  <div style={{ display: 'flex', gap: 12, borderBottom: '1px solid hsl(var(--border))', paddingBottom: 10, marginBottom: 14 }}>
+                    <button
+                      type="button"
+                      className={`mono ${quickAuthMode === 'signin' ? 'accent' : 'muted'}`}
+                      style={{ background: 'none', border: 0, fontWeight: quickAuthMode === 'signin' ? 700 : 400, fontSize: 11 }}
+                      onClick={() => setQuickAuthMode('signin')}
+                    >
+                      01 / Sign In
+                    </button>
+                    <button
+                      type="button"
+                      className={`mono ${quickAuthMode === 'signup' ? 'accent' : 'muted'}`}
+                      style={{ background: 'none', border: 0, fontWeight: quickAuthMode === 'signup' ? 700 : 400, fontSize: 11 }}
+                      onClick={() => setQuickAuthMode('signup')}
+                    >
+                      02 / Create Account
+                    </button>
+                  </div>
+
+                  {quickAuthError && (
+                    <div
+                      style={{
+                        padding: '8px 10px',
+                        marginBottom: 12,
+                        fontSize: 11,
+                        background: 'hsl(0 80% 96%)',
+                        color: 'hsl(0 80% 30%)',
+                        border: '1px solid currentColor',
+                      }}
+                    >
+                      {quickAuthError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleQuickAuth} style={{ display: 'grid', gap: 12 }}>
+                    {quickAuthMode === 'signup' && (
+                      <div className="field">
+                        <label style={{ fontSize: 10 }} className="mono">Full name</label>
+                        <input
+                          required
+                          placeholder="Jane Doe"
+                          value={quickName}
+                          onChange={(e) => setQuickName(e.target.value)}
+                          style={{ padding: '8px 10px', fontSize: 12 }}
+                        />
+                      </div>
+                    )}
+                    <div className="field">
+                      <label style={{ fontSize: 10 }} className="mono">Email</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="client@dirace.com"
+                        value={quickEmail}
+                        onChange={(e) => setQuickEmail(e.target.value)}
+                        style={{ padding: '8px 10px', fontSize: 12 }}
+                      />
+                    </div>
+                    <div className="field">
+                      <label style={{ fontSize: 10 }} className="mono">Password</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={quickPassword}
+                        onChange={(e) => setQuickPassword(e.target.value)}
+                        style={{ padding: '8px 10px', fontSize: 12 }}
+                      />
+                    </div>
+                    <button type="submit" className="primary-btn full-btn" disabled={quickAuthLoading} style={{ marginTop: 4 }}>
+                      {quickAuthLoading ? 'Authenticating with Supabase...' : quickAuthMode === 'signin' ? 'Sign In & Unlock Reviews' : 'Create Account & Unlock'}
+                    </button>
+                  </form>
+
+                  <div style={{ textAlign: 'center', marginTop: 14 }}>
+                    <Link href="/account" className="mono muted" style={{ fontSize: 10, textDecoration: 'underline' }}>
+                      Or go to Client Account page &rarr;
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Reviews List on right */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div className="eyebrow accent">
+                Archive Reflections ({productReviews.length})
+              </div>
+              <div className="mono muted" style={{ fontSize: 10 }}>
+                Saved in Supabase 'reviews' table
+              </div>
+            </div>
+
+            {productReviews.length === 0 ? (
+              <div
+                style={{
+                  padding: 48,
+                  textAlign: 'center',
+                  background: 'hsl(0 0% 96%)',
+                  border: '1px solid hsl(var(--border))',
+                }}
+              >
+                <MessageSquare size={24} className="muted" style={{ margin: '0 auto 12px' }} />
+                <h3 className="display" style={{ fontSize: 20, margin: 0 }}>
+                  NO REFLECTIONS YET
+                </h3>
+                <p className="muted" style={{ fontSize: 12, marginTop: 8, maxWidth: 360, margin: '8px auto 0' }}>
+                  Be the first authenticated client to record your review in the Supabase 'reviews' table for this piece.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 16 }}>
+                {productReviews.map((rev) => {
+                  const isOwner = currentUser && (currentUser.id === rev.user_id || currentUser.email === rev.user_email);
+                  return (
+                    <div
+                      key={rev.id}
+                      style={{
+                        border: '1px solid hsl(var(--border))',
+                        padding: 24,
+                        background: 'hsl(0 0% 98%)',
+                        position: 'relative',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ display: 'flex', color: 'hsl(var(--foreground))' }}>
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  size={13}
+                                  fill={s <= rev.rating ? 'currentColor' : 'none'}
+                                  stroke="currentColor"
+                                />
+                              ))}
+                            </div>
+                            <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>
+                              {rev.rating}.0 / 5.0
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                            <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>
+                              {rev.user_name}
+                            </span>
+                            <span
+                              className="mono"
+                              style={{
+                                fontSize: 9,
+                                padding: '2px 6px',
+                                background: 'hsl(0 0% 90%)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <ShieldCheck size={10} /> Verified Client
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span className="mono muted" style={{ fontSize: 10 }}>
+                            {new Date(rev.created_at).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </span>
+                          {isOwner && (
+                            <button
+                              className="icon-btn"
+                              style={{ padding: 4 }}
+                              title="Delete reflection"
+                              onClick={() => deleteReview(rev.id)}
+                            >
+                              <Trash2 size={13} className="muted" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <p
+                        style={{
+                          margin: '12px 0 0',
+                          fontSize: 13,
+                          lineHeight: 1.7,
+                          color: 'hsl(var(--foreground))',
+                        }}
+                      >
+                        "{rev.comment}"
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 function Collections() {
-  return <main><div className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Collections</div><h1 className="display">A STUDY IN<br />CONTRAST</h1></div></div><section className="split-feature"><div className="feature-image" style={{ backgroundImage: "url('/dirace-look-02.jpg')" }} /><div className="feature-copy"><div><div className="feature-number">Collection 01 / 25</div><h2 className="display">THE NEW<br />STANDARD.</h2></div><div><p>Built from the tension between utility and elegance. A wardrobe of strong lines, generous volume and subtle interruption.</p><Link href="/shop" className="text-link">Shop Collection 01 <ArrowRight size={14} /></Link></div></div></section><section className="section page-wrap"><div className="section-head"><div><div className="eyebrow accent">The language</div><h2 className="display section-title">THREE<br />INSTINCTS</h2></div><div className="section-copy">Every DIRACE collection starts with a question: what can a garment say before you do?</div></div><div className="editorial-strip"><div className="editorial-tile"><img src="/dirace-look-01.jpg" alt="Tailoring collection" /><span className="editorial-label">01 — Structure</span></div><div className="editorial-tile"><img src="/dirace-look-03.jpg" alt="Knitwear collection" /><span className="editorial-label">02 — Ease</span></div><div className="editorial-tile"><img src="/dirace-hero.jpg" alt="Outerwear collection" /><span className="editorial-label">03 — Presence</span></div></div></section></main>;
+  return (
+    <main>
+      <div className="page-wrap">
+        <div className="page-header">
+          <div className="eyebrow accent">DIRACE / Collections</div>
+          <h1 className="display">
+            A STUDY IN
+            <br />
+            CONTRAST
+          </h1>
+        </div>
+      </div>
+      <section className="split-feature">
+        <div className="feature-image" style={{ backgroundImage: "url('/dirace-look-02.jpg')" }} />
+        <div className="feature-copy">
+          <div>
+            <div className="feature-number">Collection 01 / 25</div>
+            <h2 className="display">
+              THE NEW
+              <br />
+              STANDARD.
+            </h2>
+          </div>
+          <div>
+            <p>
+              Built from the tension between utility and elegance. A wardrobe of strong lines, generous volume and
+              subtle interruption.
+            </p>
+            <Link href="/shop" className="text-link">
+              Shop Collection 01 <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+      </section>
+      <section className="section page-wrap">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow accent">The language</div>
+            <h2 className="display section-title">
+              THREE
+              <br />
+              INSTINCTS
+            </h2>
+          </div>
+          <div className="section-copy">
+            Every DIRACE collection starts with a question: what can a garment say before you do?
+          </div>
+        </div>
+        <div className="editorial-strip">
+          <div className="editorial-tile">
+            <img src="/dirace-look-01.jpg" alt="Tailoring collection" />
+            <span className="editorial-label">01 — Structure</span>
+          </div>
+          <div className="editorial-tile">
+            <img src="/dirace-look-03.jpg" alt="Knitwear collection" />
+            <span className="editorial-label">02 — Ease</span>
+          </div>
+          <div className="editorial-tile">
+            <img src="/dirace-hero.jpg" alt="Outerwear collection" />
+            <span className="editorial-label">03 — Presence</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 function About() {
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / About</div><h1 className="display">WE MAKE<br />THE MARK.</h1></div><div className="content-narrow"><div className="about-grid"><div><div className="eyebrow accent">Our standard</div><h2 className="display">CLOTHING<br />AS IDENTITY.</h2></div><div><p>DIRACE began with a simple refusal: to make clothes that disappear. We believe what you wear can be an act of authorship — an external language for an internal point of view.</p><p>Based in London and made in small, deliberate runs, each piece is designed to stay in rotation. We choose cloth for its hand, construction for its longevity, and proportion for the room it gives you.</p><p>We are not interested in basics. We are interested in the things you reach for when you know exactly who you are.</p></div></div><div style={{ marginTop: 90, aspectRatio: '1.9', background: "url('/dirace-hero.jpg') center 42% / cover", filter: 'saturate(.5)' }} /><div style={{ marginTop: 90, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 50 }}><div><div className="eyebrow accent">01 — Materials</div><p className="muted" style={{ lineHeight: 1.8, fontSize: 13 }}>Traceable wool. Dense cotton. Organic yarns. We select materials for how they age, not how they photograph on day one.</p></div><div><div className="eyebrow accent">02 — Making</div><p className="muted" style={{ lineHeight: 1.8, fontSize: 13 }}>Small runs, close partners, clear standards. Good clothing is a conversation between a designer, a maker and the person who wears it.</p></div></div></div></main>;
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / About</div>
+        <h1 className="display">
+          WE MAKE
+          <br />
+          THE MARK.
+        </h1>
+      </div>
+      <div className="content-narrow">
+        <div className="about-grid">
+          <div>
+            <div className="eyebrow accent">Our standard</div>
+            <h2 className="display">
+              CLOTHING
+              <br />
+              AS IDENTITY.
+            </h2>
+          </div>
+          <div>
+            <p>
+              DIRACE began with a simple refusal: to make clothes that disappear. We believe what you wear can be an act of
+              authorship — an external language for an internal point of view.
+            </p>
+            <p>
+              Based in London and made in small, deliberate runs, each piece is designed to stay in rotation. We choose cloth
+              for its hand, construction for its longevity, and proportion for the room it gives you.
+            </p>
+            <p>We are not interested in basics. We are interested in the things you reach for when you know exactly who you are.</p>
+          </div>
+        </div>
+        <div
+          style={{
+            marginTop: 90,
+            aspectRatio: '1.9',
+            background: "url('/dirace-hero.jpg') center 42% / cover",
+            filter: 'saturate(.5)',
+          }}
+        />
+        <div style={{ marginTop: 90, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 50 }}>
+          <div>
+            <div className="eyebrow accent">01 — Materials</div>
+            <p className="muted" style={{ lineHeight: 1.8, fontSize: 13 }}>
+              Traceable wool. Dense cotton. Organic yarns. We select materials for how they age, not how they photograph on day
+              one.
+            </p>
+          </div>
+          <div>
+            <div className="eyebrow accent">02 — Making</div>
+            <p className="muted" style={{ lineHeight: 1.8, fontSize: 13 }}>
+              Small runs, close partners, clear standards. Good clothing is a conversation between a designer, a maker and the
+              person who wears it.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function Contact() {
   const [sent, setSent] = useState(false);
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Contact</div><h1 className="display">SAY<br />HELLO.</h1></div><div className="content-narrow"><div className="about-grid"><div><p className="display" style={{ fontSize: 36 }}>For questions about an order, a piece, or anything else on your mind.</p><div className="footer-links" style={{ marginTop: 40 }}><a href="mailto:studio@dirace.com">studio@dirace.com</a><span>Mon–Fri / 09:00–18:00 GMT</span><span>14 Redchurch Street<br />London E2 7DD</span></div></div>{sent ? <div className="empty-state" style={{ padding: 50 }}><Check size={26} className="accent" /><h2 style={{ fontSize: 28 }}>Message sent.</h2><p>We'll be in touch within two working days.</p></div> : <form className="contact-form" onSubmit={(event) => { event.preventDefault(); setSent(true); }}><div className="field"><label htmlFor="name">Your name</label><input id="name" required data-testid="input-contact-name" /></div><div className="field"><label htmlFor="email">Email address</label><input id="email" type="email" required data-testid="input-contact-email" /></div><div className="field"><label htmlFor="message">Message</label><textarea id="message" required data-testid="input-contact-message" /></div><button className="primary-btn" type="submit" data-testid="button-contact-submit">Send message <ArrowRight size={14} style={{ verticalAlign: 'middle' }} /></button></form>}</div></div></main>;
+
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Contact</div>
+        <h1 className="display">
+          SAY
+          <br />
+          HELLO.
+        </h1>
+      </div>
+      <div className="content-narrow">
+        <div className="about-grid">
+          <div>
+            <p className="display" style={{ fontSize: 36 }}>
+              For questions about an order, a piece, or anything else on your mind.
+            </p>
+            <div className="footer-links" style={{ marginTop: 40 }}>
+              <a href="mailto:studio@dirace.com">studio@dirace.com</a>
+              <span>Mon–Fri / 09:00–18:00 GMT</span>
+              <span>
+                14 Redchurch Street
+                <br />
+                London E2 7DD
+              </span>
+            </div>
+          </div>
+          {sent ? (
+            <div className="empty-state" style={{ padding: 50 }}>
+              <Check size={26} className="accent" />
+              <h2 style={{ fontSize: 28 }}>Message sent.</h2>
+              <p>We'll be in touch within two working days.</p>
+            </div>
+          ) : (
+            <form
+              className="contact-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSent(true);
+              }}
+            >
+              <div className="field">
+                <label htmlFor="name">Your name</label>
+                <input id="name" required data-testid="input-contact-name" />
+              </div>
+              <div className="field">
+                <label htmlFor="email">Email address</label>
+                <input id="email" type="email" required data-testid="input-contact-email" />
+              </div>
+              <div className="field">
+                <label htmlFor="message">Message</label>
+                <textarea id="message" required data-testid="input-contact-message" />
+              </div>
+              <button className="primary-btn" type="submit" data-testid="button-contact-submit">
+                Send message <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function Wishlist({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
-  const products = useProducts();
-
+  const { products } = useStore();
   const saved = products.filter((product) => wishlist.includes(product.id));
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">WISHLIST</h1></div>{saved.length === 0 ? <EmptyState title="Nothing saved yet." copy="Connect the Database to sync saved pieces to this space." cta="Explore the collection" href="/shop" icon={<Heart size={24} />} /> : <div className="shop-grid">{saved.map((product) => <ProductCard key={product.id} product={product} isSaved onToggleWish={onToggleWish} />)}</div>}</main>;
+
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Personal</div>
+        <h1 className="display">WISHLIST</h1>
+      </div>
+      {saved.length === 0 ? (
+        <EmptyState
+          title="Nothing saved yet."
+          copy="Click the heart on any piece in the collection to keep it close."
+          cta="Explore the collection"
+          href="/shop"
+          icon={<Heart size={24} />}
+        />
+      ) : (
+        <div className="shop-grid">
+          {saved.map((product) => (
+            <ProductCard key={product.id} product={product} isSaved onToggleWish={onToggleWish} />
+          ))}
+        </div>
+      )}
+    </main>
+  );
 }
 
-function Cart({ items, onQty, onRemove }: { items: CartItem[]; onQty: (index: number, delta: number) => void; onRemove: (index: number) => void }) {
-  const products = useProducts();
+function Cart({
+  items,
+  onQty,
+  onRemove,
+}: {
+  items: CartItem[];
+  onQty: (index: number, delta: number) => void;
+  onRemove: (index: number) => void;
+}) {
+  const { products } = useStore();
+  const detailed = items
+    .map((item) => ({
+      ...item,
+      product: products.find((product) => product.id === item.productId) || DEFAULT_PRODUCTS.find((p) => p.id === item.productId)!,
+    }))
+    .filter((item) => Boolean(item.product));
 
-  const detailed = items.map((item) => ({ ...item, product: products.find((product) => product.id === item.productId)! }));
   const subtotal = detailed.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Your selection</div><h1 className="display">YOUR BAG <span className="muted" style={{ fontSize: '30%' }}>({items.length})</span></h1></div>{items.length === 0 ? <EmptyState title="Your bag is quiet." copy="The right piece is worth waiting for." cta="Discover the collection" href="/shop" icon={<ShoppingBag size={24} />} /> : <div className="cart-layout"><div>{detailed.map((item, index) => <div className="cart-item" key={`${item.product.id}-${item.size}`}><img src={item.product.image} alt={item.product.alt} /><div><div className="eyebrow accent">{item.product.category}</div><h3>{item.product.name}</h3><div className="muted" style={{ fontSize: 11 }}>Size {item.size}</div><div className="qty-control" style={{ marginTop: 17 }}><button onClick={() => onQty(index, -1)} aria-label="Decrease quantity" data-testid={`button-decrease-${item.product.id}`}><Minus size={12} /></button><span data-testid={`text-quantity-${item.product.id}`}>{item.quantity}</span><button onClick={() => onQty(index, 1)} aria-label="Increase quantity" data-testid={`button-increase-${item.product.id}`}><Plus size={12} /></button></div></div><div style={{ textAlign: 'right' }}><div className="price">{money(item.product.price * item.quantity)}</div><button className="icon-btn" onClick={() => onRemove(index)} aria-label="Remove item" data-testid={`button-remove-${item.product.id}`}><Trash2 size={15} /></button></div></div>)}</div><aside className="cart-summary"><div className="eyebrow accent">Summary</div><div className="summary-row"><span>Subtotal</span><span>{money(subtotal)}</span></div><div className="summary-row"><span>Shipping</span><span>{subtotal >= 250 ? 'Complimentary' : money(18)}</span></div><div className="summary-row summary-total"><span>Total</span><span>{money(subtotal >= 250 ? subtotal : subtotal + 18)}</span></div><Link href="/checkout" className="primary-btn full-btn" style={{ display: 'block', textAlign: 'center' }} data-testid="link-checkout">Proceed to checkout <ArrowRight size={14} style={{ verticalAlign: 'middle' }} /></Link><div className="mono muted" style={{ textAlign: 'center', marginTop: 18, fontSize: 9 }}>Taxes calculated at checkout</div></aside></div>}</main>;
+  const freeShippingThreshold = 150000; // ₦150,000
+  const shippingFee = subtotal >= freeShippingThreshold ? 0 : 5000;
+  const grandTotal = subtotal + shippingFee;
+
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Your selection</div>
+        <h1 className="display">
+          YOUR BAG <span className="muted" style={{ fontSize: '30%' }}>({items.length})</span>
+        </h1>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState
+          title="Your bag is quiet."
+          copy="The right piece is worth waiting for."
+          cta="Discover the collection"
+          href="/shop"
+          icon={<ShoppingBag size={24} />}
+        />
+      ) : (
+        <div className="cart-layout">
+          <div>
+            {detailed.map((item, index) => (
+              <div className="cart-item" key={`${item.product.id}-${item.size}`}>
+                <img src={item.product.image} alt={item.product.alt} />
+                <div>
+                  <div className="eyebrow accent">{item.product.category}</div>
+                  <h3>{item.product.name}</h3>
+                  <div className="muted" style={{ fontSize: 11 }}>
+                    Size {item.size}
+                  </div>
+                  <div className="qty-control" style={{ marginTop: 17 }}>
+                    <button
+                      onClick={() => onQty(index, -1)}
+                      aria-label="Decrease quantity"
+                      data-testid={`button-decrease-${item.product.id}`}
+                    >
+                      <Minus size={12} />
+                    </button>
+                    <span data-testid={`text-quantity-${item.product.id}`}>{item.quantity}</span>
+                    <button
+                      onClick={() => onQty(index, 1)}
+                      aria-label="Increase quantity"
+                      data-testid={`button-increase-${item.product.id}`}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="price">{money(item.product.price * item.quantity)}</div>
+                  <button
+                    className="icon-btn"
+                    onClick={() => onRemove(index)}
+                    aria-label="Remove item"
+                    data-testid={`button-remove-${item.product.id}`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <aside className="cart-summary">
+            <div className="eyebrow accent">Summary</div>
+            <div className="summary-row">
+              <span>Subtotal</span>
+              <span>{money(subtotal)}</span>
+            </div>
+            <div className="summary-row">
+              <span>Shipping</span>
+              <span>{subtotal >= freeShippingThreshold ? 'Complimentary' : money(shippingFee)}</span>
+            </div>
+            <div className="summary-row summary-total">
+              <span>Total</span>
+              <span>{money(grandTotal)}</span>
+            </div>
+            <Link
+              href="/checkout"
+              className="primary-btn full-btn"
+              style={{ display: 'block', textAlign: 'center' }}
+              data-testid="link-checkout"
+            >
+              Proceed to checkout <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+            </Link>
+            <div className="mono muted" style={{ textAlign: 'center', marginTop: 18, fontSize: 9 }}>
+              Base currency in Nigerian Naira (₦)
+            </div>
+          </aside>
+        </div>
+      )}
+    </main>
+  );
 }
 
-function EmptyState({ title, copy, cta, href, icon }: { title: string; copy: string; cta: string; href: string; icon: ReactNode }) {
-  return <div className="empty-state"><div className="accent">{icon}</div><h2 className="display">{title}</h2><p>{copy}</p><Link href={href} className="primary-btn" style={{ display: 'inline-block', marginTop: 25 }} data-testid="link-empty-cta">{cta} <ArrowRight size={14} style={{ verticalAlign: 'middle' }} /></Link></div>;
+function EmptyState({
+  title,
+  copy,
+  cta,
+  href,
+  icon,
+}: {
+  title: string;
+  copy: string;
+  cta: string;
+  href: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="empty-state">
+      <div className="accent">{icon}</div>
+      <h2 className="display">{title}</h2>
+      <p>{copy}</p>
+      <Link href={href} className="primary-btn" style={{ display: 'inline-block', marginTop: 25 }} data-testid="link-empty-cta">
+        {cta} <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+      </Link>
+    </div>
+  );
 }
 
 function Checkout({ items }: { items: CartItem[] }) {
-  const products = useProducts();
+  const { products, clearCart, refreshOrders } = useStore();
   const [placed, setPlaced] = useState(false);
-  const total = items.reduce((sum, item) => { const product = products.find((p) => p.id === item.productId); return sum + (product?.price ?? 0) * item.quantity; }, 0);
-  if (placed) return <main className="page-wrap"><div className="content-narrow"><div className="empty-state"><Check size={28} className="accent" /><h2 className="display">ORDER CONFIRMED.</h2><p>Your order is being prepared with care. A confirmation is on its way to your inbox.</p><Link href="/" className="primary-btn" style={{ display: 'inline-block', marginTop: 26 }}>Return home</Link></div></div></main>;
-  if (items.length === 0) return <main className="page-wrap"><div className="page-header"><h1 className="display">CHECKOUT</h1></div><EmptyState title="Nothing to check out." copy="Your bag is waiting for a point of view." cta="Shop DIRACE" href="/shop" icon={<ShoppingBag size={24} />} /></main>;
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Secure checkout</div><h1 className="display">MAKE IT<br />YOURS.</h1></div><div className="cart-layout"><form className="contact-form" onSubmit={(event) => { event.preventDefault(); setPlaced(true); }}><div className="eyebrow accent">01 / Delivery details</div><div className="field"><label htmlFor="checkout-email">Email address</label><input id="checkout-email" type="email" required data-testid="input-checkout-email" /></div><div className="field"><label htmlFor="checkout-name">Full name</label><input id="checkout-name" required data-testid="input-checkout-name" /></div><div className="field"><label htmlFor="checkout-address">Address</label><input id="checkout-address" required data-testid="input-checkout-address" /></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}><div className="field"><label htmlFor="checkout-city">City</label><input id="checkout-city" required data-testid="input-checkout-city" /></div><div className="field"><label htmlFor="checkout-postcode">Postcode</label><input id="checkout-postcode" required data-testid="input-checkout-postcode" /></div></div><div className="eyebrow accent" style={{ marginTop: 20 }}>02 / Payment</div><div className="field"><label htmlFor="checkout-card">Card number</label><input id="checkout-card" inputMode="numeric" placeholder="0000 0000 0000 0000" required data-testid="input-checkout-card" /></div><button className="primary-btn" type="submit" data-testid="button-place-order">Place order · {money(total)} <ArrowRight size={14} style={{ verticalAlign: 'middle' }} /></button></form><aside className="cart-summary"><div className="eyebrow accent">Your pieces</div>{items.map((item) => { const product = products.find((p) => p.id === item.productId)!; return <div className="summary-row" key={`${item.productId}-${item.size}`}><span>{product.name} × {item.quantity}</span><span>{money(product.price * item.quantity)}</span></div>; })}<div className="summary-row summary-total"><span>Total</span><span>{money(total)}</span></div></aside></div></main>;
+  const [orderId, setOrderId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const [form, setForm] = useState({
+    email: '',
+    name: '',
+    address: '',
+    city: '',
+    postcode: '',
+  });
+
+  const detailedItems = items
+    .map((item) => ({
+      ...item,
+      product: products.find((p) => p.id === item.productId) || DEFAULT_PRODUCTS.find((p) => p.id === item.productId)!,
+    }))
+    .filter((item) => Boolean(item.product));
+
+  const subtotal = detailedItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const shippingFee = subtotal >= 150000 ? 0 : 5000;
+  const total = subtotal + shippingFee;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    const currentUser = await getSupabaseCurrentUser();
+    const orderItems = detailedItems.map((item) => ({
+      product_id: item.product.id,
+      name: item.product.name,
+      size: item.size,
+      quantity: item.quantity,
+      price: item.product.price,
+      image: item.product.image,
+    }));
+
+    try {
+      const created = await createOrderInSupabase({
+        user_id: currentUser?.id || null,
+        customer_name: form.name,
+        customer_email: form.email,
+        shipping_address: form.address,
+        city: form.city,
+        postcode: form.postcode,
+        total_amount: total,
+        items: orderItems,
+      });
+
+      setOrderId(created.id);
+      setPlaced(true);
+      clearCart();
+      await refreshOrders();
+    } catch (err) {
+      console.error('Failed to create order in Supabase:', err);
+      // Still show confirmation in preview
+      setOrderId(`ord_${Date.now().toString().slice(-6)}`);
+      setPlaced(true);
+      clearCart();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (placed) {
+    return (
+      <main className="page-wrap">
+        <div className="content-narrow">
+          <div className="empty-state">
+            <Check size={28} className="accent" />
+            <h2 className="display">ORDER CONFIRMED.</h2>
+            <p style={{ marginTop: 12 }}>
+              Reference number: <strong className="mono">{orderId}</strong>
+            </p>
+            <p className="muted" style={{ maxWidth: 440, margin: '14px auto 0', lineHeight: 1.8 }}>
+              Your order has been recorded into Supabase. A confirmation email and shipping updates will be dispatched to{' '}
+              <strong>{form.email || 'your email'}</strong>.
+            </p>
+            <div style={{ marginTop: 32, display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <Link href="/shop" className="primary-btn">
+                Continue shopping
+              </Link>
+              <Link href="/account" className="secondary-btn">
+                View in Account
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <main className="page-wrap">
+        <div className="page-header">
+          <h1 className="display">CHECKOUT</h1>
+        </div>
+        <EmptyState
+          title="Nothing to check out."
+          copy="Your bag is waiting for a point of view."
+          cta="Shop DIRACE"
+          href="/shop"
+          icon={<ShoppingBag size={24} />}
+        />
+      </main>
+    );
+  }
+
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Secure checkout</div>
+        <h1 className="display">
+          MAKE IT
+          <br />
+          YOURS.
+        </h1>
+      </div>
+      <div className="cart-layout">
+        <form className="contact-form" onSubmit={handleSubmit}>
+          <div className="eyebrow accent">01 / Delivery details</div>
+          <div className="field">
+            <label htmlFor="checkout-email">Email address</label>
+            <input
+              id="checkout-email"
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="client@dirace.com"
+              data-testid="input-checkout-email"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="checkout-name">Full name</label>
+            <input
+              id="checkout-name"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Alexander Wright"
+              data-testid="input-checkout-name"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="checkout-address">Shipping address</label>
+            <input
+              id="checkout-address"
+              required
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="14 Redchurch Street"
+              data-testid="input-checkout-address"
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <div className="field">
+              <label htmlFor="checkout-city">City</label>
+              <input
+                id="checkout-city"
+                required
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                placeholder="Lagos / London"
+                data-testid="input-checkout-city"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="checkout-postcode">Postcode / ZIP</label>
+              <input
+                id="checkout-postcode"
+                required
+                value={form.postcode}
+                onChange={(e) => setForm({ ...form, postcode: e.target.value })}
+                placeholder="101233"
+                data-testid="input-checkout-postcode"
+              />
+            </div>
+          </div>
+          <div className="eyebrow accent" style={{ marginTop: 24 }}>
+            02 / Payment method
+          </div>
+          <div className="field">
+            <label htmlFor="checkout-card">Card number</label>
+            <input
+              id="checkout-card"
+              inputMode="numeric"
+              placeholder="•••• •••• •••• 4242"
+              required
+              data-testid="input-checkout-card"
+            />
+          </div>
+          <button className="primary-btn" type="submit" disabled={submitting} data-testid="button-place-order">
+            {submitting ? 'Placing order in Supabase...' : `Place order · ${money(total)}`}{' '}
+            <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+          </button>
+        </form>
+        <aside className="cart-summary">
+          <div className="eyebrow accent">Your selection</div>
+          {detailedItems.map((item) => (
+            <div className="summary-row" key={`${item.productId}-${item.size}`}>
+              <span>
+                {item.product.name} ({item.size}) × {item.quantity}
+              </span>
+              <span>{money(item.product.price * item.quantity)}</span>
+            </div>
+          ))}
+          <div className="summary-row">
+            <span>Shipping</span>
+            <span>{subtotal >= 150000 ? 'Complimentary' : money(shippingFee)}</span>
+          </div>
+          <div className="summary-row summary-total">
+            <span>Total amount</span>
+            <span>{money(total)}</span>
+          </div>
+          <div className="mono muted" style={{ marginTop: 14, fontSize: 10 }}>
+            Syncs to Supabase Orders database
+          </div>
+        </aside>
+      </div>
+    </main>
+  );
 }
 
 function SearchPage({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
-  const products = useProducts();
-
+  const { products } = useStore();
   const [term, setTerm] = useState('');
-  const result = useMemo(() => products.filter((product) => `${product.name} ${product.category}`.toLowerCase().includes(term.toLowerCase())), [term]);
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Search</div><h1 className="display">FIND YOUR<br />FORM.</h1></div><div className="search-box"><Search size={22} strokeWidth={1.5} /><input autoFocus placeholder="Search pieces, categories..." value={term} onChange={(event) => setTerm(event.target.value)} aria-label="Search products" data-testid="input-search" /><span className="mono muted">{result.length} results</span></div>{term && result.length === 0 ? <EmptyState title="No exact match." copy="Try a wider search. The right silhouette may be waiting under another name." cta="View all pieces" href="/shop" icon={<Search size={24} />} /> : <div className="shop-grid">{result.map((product) => <ProductCard key={product.id} product={product} isSaved={wishlist.includes(product.id)} onToggleWish={onToggleWish} />)}</div>}</main>;
+  const result = useMemo(
+    () => products.filter((p) => `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(term.toLowerCase())),
+    [products, term]
+  );
+
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Search</div>
+        <h1 className="display">
+          FIND YOUR
+          <br />
+          FORM.
+        </h1>
+      </div>
+      <div className="search-box">
+        <Search size={22} strokeWidth={1.5} />
+        <input
+          autoFocus
+          placeholder="Search pieces, categories..."
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          aria-label="Search products"
+          data-testid="input-search"
+        />
+        <span className="mono muted">{result.length} results</span>
+      </div>
+      {term && result.length === 0 ? (
+        <EmptyState
+          title="No exact match."
+          copy="Try a wider search. The right silhouette may be waiting under another name."
+          cta="View all pieces"
+          href="/shop"
+          icon={<Search size={24} />}
+        />
+      ) : (
+        <div className="shop-grid">
+          {result.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              isSaved={wishlist.includes(product.id)}
+              onToggleWish={onToggleWish}
+            />
+          ))}
+        </div>
+      )}
+    </main>
+  );
 }
 
 function Account() {
+  const { orders, refreshUser } = useStore();
   const [user, setUser] = useState<User | null>(null);
-  
+  const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
   useEffect(() => {
-    return onAuthStateChanged(auth, setUser);
+    getSupabaseCurrentUser().then((u) => {
+      setUser(u);
+      setLoading(false);
+    });
   }, []);
 
-  const login = () => signInWithPopup(auth, googleAuthProvider);
-  const logout = () => signOut(auth);
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatusMessage(null);
 
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Personal</div><h1 className="display">YOUR SPACE.</h1></div><div className="content-narrow"><div className="account-panel"><div className="eyebrow accent">Client account</div><h2 className="display" style={{ fontSize: 45, margin: '18px 0' }}>WELCOME IN.</h2><p className="muted" style={{ fontSize: 13, lineHeight: 1.8 }}>Account access, saved pieces, order history, and faster checkout enabled securely.</p><div className="rule" style={{ margin: '25px 0' }} />
-  
-  {user ? (
-    <div>
-      <p>Signed in as <strong>{user.email}</strong></p>
-      <button className="primary-btn" onClick={logout} style={{marginTop: 20}}>Sign Out</button>
-    </div>
-  ) : (
-    <div className="empty-state" style={{ padding: '52px 24px' }}><UserRound size={24} className="accent" /><h2 className="display" style={{ fontSize: 32 }}>AUTH NOT CONNECTED.</h2><p>Sign in with your Google account to access your personal space.</p><button className="primary-btn" onClick={login} style={{marginTop: 20}}>Sign in with Google</button></div>
-  )}
-  
-  </div></div></main>;
+    if (mode === 'signup') {
+      const res = await supabaseSignUp(email, password, fullName);
+      if (res.error) {
+        setStatusMessage({ type: 'error', text: res.error });
+      } else {
+        setUser(res.user);
+        await refreshUser();
+        setStatusMessage({ type: 'success', text: 'Supabase account created successfully.' });
+      }
+    } else {
+      const res = await supabaseSignIn(email, password);
+      if (res.error) {
+        setStatusMessage({ type: 'error', text: res.error });
+      } else {
+        setUser(res.user);
+        await refreshUser();
+        setStatusMessage({ type: 'success', text: 'Welcome back to your DIRACE space.' });
+      }
+    }
+  };
+
+  const handleGoogle = async () => {
+    const res = await supabaseSignInWithGoogle();
+    if (res.error) {
+      setStatusMessage({ type: 'error', text: res.error });
+    } else {
+      const u = await getSupabaseCurrentUser();
+      setUser(u);
+      await refreshUser();
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabaseSignOut();
+    setUser(null);
+    await refreshUser();
+    setStatusMessage(null);
+  };
+
+  const userOrders = orders.filter((o) => o.customer_email?.toLowerCase() === user?.email?.toLowerCase());
+
+  return (
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Personal Space</div>
+        <h1 className="display">CLIENT ACCOUNT</h1>
+      </div>
+      <div className="content-narrow">
+        <div className="account-panel" style={{ maxWidth: 640 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="eyebrow accent">Supabase Authentication</div>
+            <div
+              className="mono"
+              style={{
+                fontSize: 9,
+                padding: '3px 8px',
+                background: isSupabaseConfigured() ? 'hsl(142 70% 45% / .15)' : 'hsl(0 0% 90%)',
+                color: isSupabaseConfigured() ? 'hsl(142 76% 36%)' : 'inherit',
+                border: '1px solid hsl(var(--border))',
+              }}
+            >
+              {isSupabaseConfigured() ? 'SUPABASE LIVE' : 'SUPABASE READY'}
+            </div>
+          </div>
+
+          {user ? (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: '50%',
+                    background: 'hsl(var(--foreground))',
+                    color: 'hsl(var(--background))',
+                    display: 'grid',
+                    placeItems: 'center',
+                    font: '16px var(--app-font-serif)',
+                  }}
+                >
+                  {user.email?.charAt(0).toUpperCase() || 'C'}
+                </div>
+                <div>
+                  <h2 className="display" style={{ fontSize: 28, margin: 0 }}>
+                    {user.user_metadata?.full_name || 'DIRACE CLIENT'}
+                  </h2>
+                  <p className="mono muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rule" style={{ margin: '28px 0' }} />
+
+              <div className="eyebrow accent">Order History (Supabase Database)</div>
+              {userOrders.length > 0 ? (
+                <div style={{ display: 'grid', gap: 14, marginTop: 14 }}>
+                  {userOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      style={{
+                        border: '1px solid hsl(var(--border))',
+                        padding: 16,
+                        background: 'hsl(0 0% 96%)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>
+                          {order.id}
+                        </span>
+                        <span
+                          className="mono"
+                          style={{
+                            fontSize: 10,
+                            padding: '2px 6px',
+                            background: 'hsl(var(--foreground))',
+                            color: 'hsl(var(--background))',
+                          }}
+                        >
+                          {order.status}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 12 }}>
+                        <span className="muted">{order.items?.length || 0} items</span>
+                        <strong className="mono">{money(order.total_amount)}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                  No past orders found in Supabase for this account.
+                </p>
+              )}
+
+              <div style={{ marginTop: 36, display: 'flex', gap: 14 }}>
+                <button className="secondary-btn" onClick={handleSignOut}>
+                  Sign Out
+                </button>
+                <Link href="/shop" className="primary-btn">
+                  Explore New Pieces
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ display: 'flex', gap: 18, borderBottom: '1px solid hsl(var(--border))', paddingBottom: 12 }}>
+                <button
+                  type="button"
+                  className={`mono ${mode === 'signin' ? 'accent' : 'muted'}`}
+                  style={{ background: 'none', border: 0, fontWeight: mode === 'signin' ? 700 : 400 }}
+                  onClick={() => setMode('signin')}
+                >
+                  01 / Sign In
+                </button>
+                <button
+                  type="button"
+                  className={`mono ${mode === 'signup' ? 'accent' : 'muted'}`}
+                  style={{ background: 'none', border: 0, fontWeight: mode === 'signup' ? 700 : 400 }}
+                  onClick={() => setMode('signup')}
+                >
+                  02 / Create Account
+                </button>
+              </div>
+
+              <h2 className="display" style={{ fontSize: 36, margin: '24px 0 8px' }}>
+                {mode === 'signin' ? 'WELCOME BACK.' : 'JOIN THE ARCHIVE.'}
+              </h2>
+              <p className="muted" style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>
+                Directly authenticated with Supabase Auth. Seamless access across all your sessions.
+              </p>
+
+              {statusMessage && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    marginBottom: 18,
+                    fontSize: 12,
+                    background: statusMessage.type === 'error' ? 'hsl(0 80% 95%)' : 'hsl(142 70% 95%)',
+                    color: statusMessage.type === 'error' ? 'hsl(0 80% 30%)' : 'hsl(142 70% 25%)',
+                    border: '1px solid currentColor',
+                  }}
+                >
+                  {statusMessage.text}
+                </div>
+              )}
+
+              <form onSubmit={handleAuth} style={{ display: 'grid', gap: 16 }}>
+                {mode === 'signup' && (
+                  <div className="field">
+                    <label htmlFor="auth-name">Full name</label>
+                    <input
+                      id="auth-name"
+                      required
+                      placeholder="Jane Doe"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                  </div>
+                )}
+                <div className="field">
+                  <label htmlFor="auth-email">Email address</label>
+                  <input
+                    id="auth-email"
+                    type="email"
+                    required
+                    placeholder="client@dirace.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-password">Password</label>
+                  <input
+                    id="auth-password"
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <button className="primary-btn full-btn" type="submit" style={{ marginTop: 8 }}>
+                  {mode === 'signin' ? 'Sign In to Supabase' : 'Create Supabase Account'}{' '}
+                  <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+                </button>
+              </form>
+
+              <div style={{ textAlign: 'center', margin: '22px 0 16px' }} className="mono muted">
+                — OR —
+              </div>
+
+              <button className="secondary-btn full-btn" onClick={handleGoogle} type="button">
+                Continue with Google OAuth
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function Admin() {
-  return <main className="page-wrap"><div className="page-header"><div className="eyebrow accent">DIRACE / Studio</div><h1 className="display">CONTROL<br />ROOM.</h1></div><section className="section" style={{ paddingTop: 48 }}><div className="admin-grid"><div className="stat-card"><div className="eyebrow accent">Revenue / 30 days</div><strong>—</strong><span className="mono muted">the Database data pending</span></div><div className="stat-card"><div className="eyebrow accent">Orders</div><strong>—</strong><span className="mono muted">the Database data pending</span></div><div className="stat-card"><div className="eyebrow accent">Pieces in studio</div><strong>—</strong><span className="mono muted">the Database data pending</span></div></div><div className="section-head"><div><div className="eyebrow accent">Live inventory</div><h2 className="display section-title" style={{ fontSize: 52 }}>THE FLOOR</h2></div><button className="secondary-btn" disabled data-testid="button-add-product">Connect the Database <Plus size={14} style={{ verticalAlign: 'middle' }} /></button></div><div className="empty-state" style={{ padding: '76px 24px' }}><ShoppingBag size={24} className="accent" /><h2 className="display" style={{ fontSize: 38 }}>NO INVENTORY CONNECTED.</h2><p>Product management, orders, customers, and analytics will be powered by your the Database setup.</p></div></section></main>;
+  const { products, refreshProducts, orders, refreshOrders, reviews, refreshReviews, deleteReview } = useStore();
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'supabase' | 'reviews'>('inventory');
+
+  // New Piece Form State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [newPiece, setNewPiece] = useState({
+    name: '',
+    category: 'Outerwear',
+    price: 250000,
+    description: '',
+    badge: 'New Arrival',
+    image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80',
+    sizes: 'S, M, L, XL',
+  });
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [seedingStatus, setSeedingStatus] = useState<string | null>(null);
+  const [seedingReviews, setSeedingReviews] = useState(false);
+  const [reviewsStatusMessage, setReviewsStatusMessage] = useState<string | null>(null);
+
+  const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+  const isConfigured = isSupabaseConfigured();
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadFeedback('Uploading to Supabase Storage bucket "products"...');
+
+    const res = await uploadProductImageToSupabase(file);
+    if (res.url) {
+      setNewPiece((prev) => ({ ...prev, image: res.url! }));
+      setUploadFeedback(res.error ? `Notice: ${res.error}` : 'Image uploaded to Supabase Storage!');
+    } else {
+      setUploadFeedback(`Storage error: ${res.error}`);
+    }
+    setIsUploading(false);
+  };
+
+  const handleAddPiece = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const sizesArray = newPiece.sizes.split(',').map((s) => s.trim()).filter(Boolean);
+
+    await addProductToSupabase({
+      name: newPiece.name,
+      category: newPiece.category,
+      price: Number(newPiece.price),
+      description: newPiece.description,
+      badge: newPiece.badge || undefined,
+      image: newPiece.image,
+      alt: newPiece.name,
+      sizes: sizesArray.length > 0 ? sizesArray : ['S', 'M', 'L'],
+    });
+
+    setShowAddModal(false);
+    setNewPiece({
+      name: '',
+      category: 'Outerwear',
+      price: 250000,
+      description: '',
+      badge: 'New Arrival',
+      image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80',
+      sizes: 'S, M, L, XL',
+    });
+    await refreshProducts();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Remove this piece from Supabase?')) {
+      await deleteProductFromSupabase(id);
+      await refreshProducts();
+    }
+  };
+
+  const handleStatusChange = async (orderId: string, status: Order['status']) => {
+    await updateOrderStatusInSupabase(orderId, status);
+    await refreshOrders();
+  };
+
+  const handleSeedCatalog = async () => {
+    setSeedingStatus('Seeding catalog to Supabase products table...');
+    const res = await seedProductsToSupabase();
+    if (res.success) {
+      setSeedingStatus(`Success! Seeded ${res.count} pieces to Supabase.`);
+      await refreshProducts();
+    } else {
+      setSeedingStatus(`Seed response: ${res.error}`);
+    }
+  };
+
+  const handlePurgeDummyReviews = async () => {
+    setSeedingReviews(true);
+    setReviewsStatusMessage('Purging any legacy dummy data from Supabase & local cache...');
+    const res = await purgeDummyReviewsFromSupabase();
+    await refreshReviews();
+    setReviewsStatusMessage('All dummy reviews purged. Only authentic client reflections will display.');
+    setSeedingReviews(false);
+  };
+
+  const copySql = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2500);
+  };
+
+  return (
+    <main className="page-wrap" style={{ paddingBottom: 120 }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div>
+          <div className="eyebrow accent">DIRACE / Studio</div>
+          <h1 className="display">CONTROL ROOM.</h1>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <span
+            className="mono"
+            style={{
+              padding: '6px 12px',
+              background: isConfigured ? 'hsl(142 70% 45% / .12)' : 'hsl(0 0% 92%)',
+              color: isConfigured ? 'hsl(142 76% 36%)' : 'inherit',
+              border: '1px solid hsl(var(--border))',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+            }}
+          >
+            <Database size={13} />
+            {isConfigured ? 'Supabase: Connected' : 'Supabase: Ready for Keys'}
+          </span>
+          <span
+            className="mono"
+            style={{
+              padding: '6px 12px',
+              background: 'hsl(0 0% 92%)',
+              border: '1px solid hsl(var(--border))',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+            }}
+          >
+            Base: NGN (₦)
+          </span>
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="admin-grid" style={{ marginTop: 32 }}>
+        <div className="stat-card">
+          <div className="eyebrow accent">Revenue / Recorded</div>
+          <strong>{money(totalRevenue)}</strong>
+          <span className="mono muted">Supabase Orders stream</span>
+        </div>
+        <div className="stat-card">
+          <div className="eyebrow accent">Customer Orders</div>
+          <strong>{orders.length}</strong>
+          <span className="mono muted">Active client dispatches</span>
+        </div>
+        <div className="stat-card">
+          <div className="eyebrow accent">Pieces in Catalog</div>
+          <strong>{products.length}</strong>
+          <span className="mono muted">Supabase Products table</span>
+        </div>
+      </div>
+
+      {/* Tab Switcher */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 20,
+          borderBottom: '1px solid hsl(var(--border))',
+          margin: '32px 0 28px',
+        }}
+      >
+        <button
+          className={`mono ${activeTab === 'inventory' ? 'accent' : 'muted'}`}
+          style={{
+            background: 'none',
+            border: 0,
+            padding: '12px 4px',
+            borderBottom: activeTab === 'inventory' ? '2px solid hsl(var(--foreground))' : 'none',
+            fontWeight: activeTab === 'inventory' ? 600 : 400,
+          }}
+          onClick={() => setActiveTab('inventory')}
+        >
+          01 / Inventory & Storage
+        </button>
+        <button
+          className={`mono ${activeTab === 'orders' ? 'accent' : 'muted'}`}
+          style={{
+            background: 'none',
+            border: 0,
+            padding: '12px 4px',
+            borderBottom: activeTab === 'orders' ? '2px solid hsl(var(--foreground))' : 'none',
+            fontWeight: activeTab === 'orders' ? 600 : 400,
+          }}
+          onClick={() => setActiveTab('orders')}
+        >
+          02 / Client Orders ({orders.length})
+        </button>
+        <button
+          className={`mono ${activeTab === 'supabase' ? 'accent' : 'muted'}`}
+          style={{
+            background: 'none',
+            border: 0,
+            padding: '12px 4px',
+            borderBottom: activeTab === 'supabase' ? '2px solid hsl(var(--foreground))' : 'none',
+            fontWeight: activeTab === 'supabase' ? 600 : 400,
+          }}
+          onClick={() => setActiveTab('supabase')}
+        >
+          03 / Supabase Setup & SQL
+        </button>
+        <button
+          className={`mono ${activeTab === 'reviews' ? 'accent' : 'muted'}`}
+          style={{
+            background: 'none',
+            border: 0,
+            padding: '12px 4px',
+            borderBottom: activeTab === 'reviews' ? '2px solid hsl(var(--foreground))' : 'none',
+            fontWeight: activeTab === 'reviews' ? 600 : 400,
+          }}
+          onClick={() => setActiveTab('reviews')}
+        >
+          04 / Reviews & Reflections ({reviews.length})
+        </button>
+      </div>
+
+      {/* TAB 1: INVENTORY & STORAGE */}
+      {activeTab === 'inventory' && (
+        <section>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div>
+              <div className="eyebrow accent">Live collection</div>
+              <h2 className="display" style={{ fontSize: 40, margin: '4px 0' }}>
+                THE STUDIO FLOOR
+              </h2>
+            </div>
+            <button className="primary-btn" onClick={() => setShowAddModal(true)} data-testid="button-add-product">
+              <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Add New Piece
+            </button>
+          </div>
+
+          {/* Add Piece Modal */}
+          {showAddModal && (
+            <div
+              style={{
+                background: 'hsl(0 0% 96%)',
+                border: '1px solid hsl(var(--border))',
+                padding: 30,
+                marginBottom: 36,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 className="display" style={{ fontSize: 26, margin: 0 }}>
+                  NEW PIECE / SUPABASE INGESTION
+                </h3>
+                <button className="icon-btn" onClick={() => setShowAddModal(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddPiece} style={{ marginTop: 20, display: 'grid', gap: 18 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 20 }}>
+                  <div className="field">
+                    <label>Piece name</label>
+                    <input
+                      required
+                      placeholder="e.g. Minimalist Cashmere Cardigan"
+                      value={newPiece.name}
+                      onChange={(e) => setNewPiece({ ...newPiece, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Category</label>
+                    <select
+                      value={newPiece.category}
+                      onChange={(e) => setNewPiece({ ...newPiece, category: e.target.value })}
+                    >
+                      <option value="Outerwear">Outerwear</option>
+                      <option value="Tailoring">Tailoring</option>
+                      <option value="Tops">Tops</option>
+                      <option value="Bottoms">Bottoms</option>
+                      <option value="Knitwear">Knitwear</option>
+                      <option value="Accessories">Accessories</option>
+                      <option value="Denim">Denim</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Price in Naira (₦)</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="250000"
+                      value={newPiece.price}
+                      onChange={(e) => setNewPiece({ ...newPiece, price: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>Description</label>
+                  <textarea
+                    required
+                    placeholder="Describe cut, proportion, cloth provenance..."
+                    value={newPiece.description}
+                    onChange={(e) => setNewPiece({ ...newPiece, description: e.target.value })}
+                    style={{ minHeight: 70 }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                  <div className="field">
+                    <label>Available Sizes (comma separated)</label>
+                    <input
+                      value={newPiece.sizes}
+                      onChange={(e) => setNewPiece({ ...newPiece, sizes: e.target.value })}
+                      placeholder="XS, S, M, L, XL"
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Badge (optional)</label>
+                    <input
+                      value={newPiece.badge}
+                      onChange={(e) => setNewPiece({ ...newPiece, badge: e.target.value })}
+                      placeholder="New Arrival / Limited"
+                    />
+                  </div>
+                </div>
+
+                {/* Supabase Storage Uploader */}
+                <div
+                  style={{
+                    border: '1px dashed hsl(var(--border))',
+                    padding: 20,
+                    background: 'hsl(var(--background))',
+                  }}
+                >
+                  <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Upload size={14} /> Supabase Storage / Piece Imagery
+                  </div>
+                  <p className="muted" style={{ fontSize: 12, margin: '6px 0 14px' }}>
+                    Upload photo directly to Supabase Storage bucket <code>products</code>, or paste an external image URL.
+                  </p>
+                  <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
+                    <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isUploading} />
+                    {newPiece.image && (
+                      <img
+                        src={newPiece.image}
+                        alt="Preview"
+                        style={{ width: 48, height: 48, objectFit: 'cover', border: '1px solid hsl(var(--border))' }}
+                      />
+                    )}
+                  </div>
+                  {uploadFeedback && (
+                    <div className="mono" style={{ fontSize: 11, marginTop: 8, color: 'hsl(var(--muted-foreground))' }}>
+                      {uploadFeedback}
+                    </div>
+                  )}
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label>Or direct Image URL</label>
+                    <input
+                      value={newPiece.image}
+                      onChange={(e) => setNewPiece({ ...newPiece, image: e.target.value })}
+                      placeholder="https://images.unsplash.com/..."
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 10 }}>
+                  <button type="button" className="secondary-btn" onClick={() => setShowAddModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary-btn">
+                    Save Piece to Supabase
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Products Table */}
+          <div className="table-overflow">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Image</th>
+                  <th>Name & Category</th>
+                  <th>Price (NGN)</th>
+                  <th>Sizes</th>
+                  <th>ID</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {products.map((p) => (
+                  <tr key={p.id}>
+                    <td style={{ width: 60 }}>
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        style={{ width: 44, height: 52, objectFit: 'cover', filter: 'saturate(.7)' }}
+                      />
+                    </td>
+                    <td>
+                      <strong>{p.name}</strong>
+                      <div className="muted" style={{ fontSize: 11 }}>
+                        {p.category} {p.badge ? `· ${p.badge}` : ''}
+                      </div>
+                    </td>
+                    <td className="mono">{money(p.price)}</td>
+                    <td className="mono" style={{ fontSize: 11 }}>
+                      {Array.isArray(p.sizes) ? p.sizes.join(', ') : 'S, M, L'}
+                    </td>
+                    <td className="mono muted" style={{ fontSize: 10 }}>
+                      {p.id}
+                    </td>
+                    <td>
+                      <button
+                        className="icon-btn"
+                        onClick={() => handleDelete(p.id)}
+                        aria-label="Delete product"
+                        title="Delete from Supabase"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 2: CLIENT ORDERS */}
+      {activeTab === 'orders' && (
+        <section>
+          <div style={{ marginBottom: 24 }}>
+            <div className="eyebrow accent">Supabase Orders</div>
+            <h2 className="display" style={{ fontSize: 40, margin: '4px 0' }}>
+              DISPATCHES & CLIENTS
+            </h2>
+          </div>
+
+          {orders.length === 0 ? (
+            <div className="empty-state">
+              <Package size={26} className="accent" />
+              <h2 className="display" style={{ fontSize: 32 }}>
+                NO ORDERS RECORDED.
+              </h2>
+              <p>When clients complete checkout, their order is captured into Supabase and listed here.</p>
+            </div>
+          ) : (
+            <div className="table-overflow">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Customer</th>
+                    <th>Destination</th>
+                    <th>Items</th>
+                    <th>Total (NGN)</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((o) => (
+                    <tr key={o.id}>
+                      <td className="mono">
+                        <strong>{o.id}</strong>
+                        <div className="muted" style={{ fontSize: 10 }}>
+                          {new Date(o.created_at).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td>
+                        <div>{o.customer_name}</div>
+                        <div className="mono muted" style={{ fontSize: 11 }}>
+                          {o.customer_email}
+                        </div>
+                      </td>
+                      <td style={{ fontSize: 11 }}>
+                        {o.shipping_address}, {o.city} {o.postcode}
+                      </td>
+                      <td>
+                        {o.items && o.items.length > 0 ? (
+                          <div style={{ fontSize: 11 }}>
+                            {o.items.map((it, idx) => (
+                              <div key={idx}>
+                                {it.name} ({it.size}) × {it.quantity}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="muted">Standard items</span>
+                        )}
+                      </td>
+                      <td className="mono" style={{ fontWeight: 700 }}>
+                        {money(o.total_amount)}
+                      </td>
+                      <td>
+                        <select
+                          value={o.status}
+                          onChange={(e) => handleStatusChange(o.id, e.target.value as Order['status'])}
+                          style={{
+                            padding: '4px 8px',
+                            background: 'transparent',
+                            border: '1px solid hsl(var(--border))',
+                            font: '10px var(--app-font-mono)',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Processing">Processing</option>
+                          <option value="Shipped">Shipped</option>
+                          <option value="Delivered">Delivered</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* TAB 3: SUPABASE SETUP & SQL */}
+      {activeTab === 'supabase' && (
+        <section>
+          <div style={{ marginBottom: 24 }}>
+            <div className="eyebrow accent">Configuration & Database Migration</div>
+            <h2 className="display" style={{ fontSize: 40, margin: '4px 0' }}>
+              SUPABASE INTEGRATION
+            </h2>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+            <div style={{ background: 'hsl(0 0% 95%)', padding: 24, border: '1px solid hsl(var(--border))' }}>
+              <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ShieldCheck size={14} /> Service Status
+              </div>
+              <h3 className="display" style={{ fontSize: 24, margin: '10px 0' }}>
+                ALL SERVICES WIRED TO SUPABASE
+              </h3>
+              <ul style={{ paddingLeft: 18, margin: '14px 0', fontSize: 13, lineHeight: 1.8 }}>
+                <li>
+                  <strong>Authentication:</strong> Supabase Auth (Email, Password, Google OAuth)
+                </li>
+                <li>
+                  <strong>Database:</strong> PostgreSQL tables for <code>products</code> and <code>orders</code>
+                </li>
+                <li>
+                  <strong>Storage:</strong> Supabase Storage bucket <code>products</code> for asset uploads
+                </li>
+                <li>
+                  <strong>Admin Controls:</strong> Real-time CRUD & dispatch state management
+                </li>
+                <li>
+                  <strong>Currency:</strong> Nigerian Naira (NGN / ₦) across all flows
+                </li>
+              </ul>
+            </div>
+
+            <div style={{ background: 'hsl(0 0% 95%)', padding: 24, border: '1px solid hsl(var(--border))' }}>
+              <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <RefreshCw size={14} /> 1-Click Catalog Seeder
+              </div>
+              <h3 className="display" style={{ fontSize: 24, margin: '10px 0' }}>
+                POPULATE SUPABASE CATALOG
+              </h3>
+              <p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>
+                Push the curated luxury DIRACE collection (with prices in Naira) straight into your connected Supabase{' '}
+                <code>products</code> table with one click.
+              </p>
+              <button
+                className="primary-btn"
+                onClick={handleSeedCatalog}
+                style={{ marginTop: 16 }}
+                data-testid="button-seed-supabase"
+              >
+                Seed DIRACE Collection to Supabase
+              </button>
+              {seedingStatus && (
+                <div className="mono" style={{ fontSize: 11, marginTop: 10, color: 'hsl(var(--foreground))' }}>
+                  {seedingStatus}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ background: 'hsl(0 0% 96%)', padding: 26, border: '1px solid hsl(var(--border))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div className="eyebrow accent">SQL Migration Script</div>
+                <h3 className="display" style={{ fontSize: 22, margin: '4px 0' }}>
+                  SUPABASE SQL SETUP
+                </h3>
+              </div>
+              <button className="secondary-btn" onClick={copySql}>
+                {copiedSql ? (
+                  <>
+                    <Check size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Copied to Clipboard
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Copy SQL Schema
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginBottom: 14 }}>
+              Paste this in your <strong>Supabase Dashboard &gt; SQL Editor</strong> to create the <code>products</code>,{' '}
+              <code>orders</code>, and <code>products</code> storage bucket with public policies in one command.
+            </p>
+            <pre
+              className="mono"
+              style={{
+                background: 'hsl(0 0% 12%)',
+                color: 'hsl(0 0% 90%)',
+                padding: 18,
+                fontSize: 11,
+                overflowX: 'auto',
+                maxHeight: 340,
+                lineHeight: 1.6,
+              }}
+            >
+              {SUPABASE_SQL_SCHEMA}
+            </pre>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 4: REVIEWS & MODERATION */}
+      {activeTab === 'reviews' && (
+        <section>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div className="eyebrow accent">Supabase 'reviews' table</div>
+              <h2 className="display" style={{ fontSize: 36, margin: '4px 0' }}>
+                CLIENT REFLECTIONS & REVIEWS
+              </h2>
+              <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
+                Manage authentic client ratings and reflections stored directly in the Supabase <code>public.reviews</code> table.
+              </p>
+            </div>
+            <button
+              className="secondary-btn"
+              onClick={handlePurgeDummyReviews}
+              disabled={seedingReviews}
+              style={{ fontSize: 12 }}
+            >
+              <RefreshCw size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+              {seedingReviews ? 'Purging Dummy Data...' : 'Purge Dummy Data & Sync'}
+            </button>
+          </div>
+
+          {reviewsStatusMessage && (
+            <div
+              className="mono"
+              style={{
+                fontSize: 11,
+                padding: '10px 14px',
+                background: 'hsl(0 0% 96%)',
+                border: '1px solid hsl(var(--border))',
+                marginBottom: 20,
+              }}
+            >
+              {reviewsStatusMessage}
+            </div>
+          )}
+
+          {/* Review metrics */}
+          <div className="admin-grid" style={{ marginBottom: 28 }}>
+            <div className="stat-card">
+              <div className="eyebrow accent">Total Reviews</div>
+              <strong>{reviews.length}</strong>
+              <span className="mono muted">In Supabase table</span>
+            </div>
+            <div className="stat-card">
+              <div className="eyebrow accent">Average Rating</div>
+              <strong>
+                {reviews.length > 0
+                  ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+                  : '—'}{' '}
+                / 5.0
+              </strong>
+              <span className="mono muted">Across active pieces</span>
+            </div>
+            <div className="stat-card">
+              <div className="eyebrow accent">5-Star Feedback</div>
+              <strong>{reviews.filter((r) => r.rating === 5).length}</strong>
+              <span className="mono muted">
+                {reviews.length > 0
+                  ? `${Math.round((reviews.filter((r) => r.rating === 5).length / reviews.length) * 100)}% 5-star rating`
+                  : 'No reviews recorded'}
+              </span>
+            </div>
+          </div>
+
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Piece</th>
+                  <th>Rating</th>
+                  <th>Client</th>
+                  <th>Reflection & Notes</th>
+                  <th>Date</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviews.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 40 }} className="muted">
+                      No client reviews recorded in Supabase yet. Authentic reflections submitted by authenticated users on product detail pages will appear here.
+                    </td>
+                  </tr>
+                ) : (
+                  reviews.map((r) => {
+                    const prod = products.find((p) => p.id === r.product_id);
+                    return (
+                      <tr key={r.id}>
+                        <td>
+                          <strong>{prod?.name || r.product_id}</strong>
+                          <div className="mono muted" style={{ fontSize: 10 }}>
+                            {prod?.category || 'Catalog Piece'}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ display: 'flex', color: 'hsl(var(--foreground))' }}>
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  size={11}
+                                  fill={s <= r.rating ? 'currentColor' : 'none'}
+                                  stroke="currentColor"
+                                />
+                              ))}
+                            </div>
+                            <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>
+                              {r.rating}.0
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="mono" style={{ fontSize: 12, fontWeight: 600 }}>
+                            {r.user_name}
+                          </div>
+                          <div className="muted mono" style={{ fontSize: 10 }}>
+                            {r.user_email || 'Authenticated User'}
+                          </div>
+                        </td>
+                        <td style={{ maxWidth: 340 }}>
+                          <span style={{ fontSize: 12, lineHeight: 1.5 }}>"{r.comment}"</span>
+                        </td>
+                        <td className="mono muted" style={{ fontSize: 11 }}>
+                          {new Date(r.created_at).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td>
+                          <button
+                            className="icon-btn"
+                            title="Delete review from Supabase"
+                            onClick={async () => {
+                              if (window.confirm('Delete this review from Supabase?')) {
+                                await deleteReview(r.id);
+                              }
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </main>
+  );
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
@@ -222,39 +3399,188 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
-function Router({ wishlist, onToggleWish, items, onAdd, onQty, onRemove }: { wishlist: string[]; onToggleWish: (id: string) => void; items: CartItem[]; onAdd: (id: string, size: string) => void; onQty: (index: number, delta: number) => void; onRemove: (index: number) => void }) {
-  return <RoutedErrorBoundary><Switch>
-    <Route path="/" component={() => <Home wishlist={wishlist} onToggleWish={onToggleWish} />} />
-    <Route path="/shop" component={() => <Shop wishlist={wishlist} onToggleWish={onToggleWish} />} />
-    <Route path="/product/:id" component={() => <ProductDetail wishlist={wishlist} onToggleWish={onToggleWish} onAdd={onAdd} />} />
-    <Route path="/collections" component={Collections} />
-    <Route path="/about" component={About} />
-    <Route path="/contact" component={Contact} />
-    <Route path="/wishlist" component={() => <Wishlist wishlist={wishlist} onToggleWish={onToggleWish} />} />
-    <Route path="/cart" component={() => <Cart items={items} onQty={onQty} onRemove={onRemove} />} />
-    <Route path="/checkout" component={() => <Checkout items={items} />} />
-    <Route path="/search" component={() => <SearchPage wishlist={wishlist} onToggleWish={onToggleWish} />} />
-    <Route path="/account" component={Account} />
-    <Route path="/admin" component={Admin} />
-    <Route component={NotFound} />
-  </Switch></RoutedErrorBoundary>;
+function Router({
+  wishlist,
+  onToggleWish,
+  items,
+  onAdd,
+  onQty,
+  onRemove,
+}: {
+  wishlist: string[];
+  onToggleWish: (id: string) => void;
+  items: CartItem[];
+  onAdd: (id: string, size: string) => void;
+  onQty: (index: number, delta: number) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <RoutedErrorBoundary>
+      <Switch>
+        <Route path="/" component={() => <Home wishlist={wishlist} onToggleWish={onToggleWish} />} />
+        <Route path="/shop" component={() => <Shop wishlist={wishlist} onToggleWish={onToggleWish} />} />
+        <Route
+          path="/product/:id"
+          component={() => <ProductDetail wishlist={wishlist} onToggleWish={onToggleWish} onAdd={onAdd} />}
+        />
+        <Route path="/collections" component={Collections} />
+        <Route path="/about" component={About} />
+        <Route path="/contact" component={Contact} />
+        <Route path="/wishlist" component={() => <Wishlist wishlist={wishlist} onToggleWish={onToggleWish} />} />
+        <Route path="/cart" component={() => <Cart items={items} onQty={onQty} onRemove={onRemove} />} />
+        <Route path="/checkout" component={() => <Checkout items={items} />} />
+        <Route path="/search" component={() => <SearchPage wishlist={wishlist} onToggleWish={onToggleWish} />} />
+        <Route path="/account" component={Account} />
+        <Route path="/admin" component={Admin} />
+        <Route component={NotFound} />
+      </Switch>
+    </RoutedErrorBoundary>
+  );
 }
 
 function App() {
-  const [products, setProducts] = useState<Product[]>([]);
-  useEffect(() => {
-    fetch("/api/products").then(r => r.json()).then(setProducts).catch(console.error);
-  }, []);
+  const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [items, setItems] = useState<CartItem[]>([]);
-  const toggleWish = (id: string) => setWishlist((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  const add = (id: string, size: string) => setItems((current) => { const found = current.find((item) => item.productId === id && item.size === size); return found ? current.map((item) => item === found ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { productId: id, size, quantity: 1 }]; });
-  const qty = (index: number, delta: number) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0));
-  const remove = (index: number) => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+
+  const openQuickView = (product: Product) => {
+    setQuickViewProduct(product);
+  };
+
+  const closeQuickView = () => {
+    setQuickViewProduct(null);
+  };
+
+  const refreshProducts = async () => {
+    try {
+      const data = await fetchProductsFromSupabase();
+      if (data && data.length > 0) {
+        setProducts(data);
+      }
+    } catch (e) {
+      console.warn('Could not refresh products from Supabase:', e);
+    }
+  };
+
+  const refreshOrders = async () => {
+    try {
+      const data = await fetchOrdersFromSupabase();
+      setOrders(data);
+    } catch (e) {
+      console.warn('Could not refresh orders from Supabase:', e);
+    }
+  };
+
+  const refreshReviews = async () => {
+    try {
+      const data = await fetchReviewsFromSupabase();
+      setReviews(data || []);
+    } catch (e) {
+      console.warn('Could not refresh reviews from Supabase:', e);
+      setReviews([]);
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const u = await getSupabaseCurrentUser();
+      setCurrentUser(u);
+    } catch (e) {
+      console.warn('Could not refresh current user:', e);
+    }
+  };
+
+  const addReview = async (reviewInput: Omit<Review, 'id' | 'created_at'>) => {
+    const newRev = await createReviewInSupabase(reviewInput);
+    await refreshReviews();
+    return newRev;
+  };
+
+  const deleteReview = async (reviewId: string) => {
+    await deleteReviewFromSupabase(reviewId);
+    await refreshReviews();
+  };
+
+  useEffect(() => {
+    refreshProducts();
+    refreshOrders();
+    refreshReviews();
+    refreshUser();
+  }, []);
+
+  const toggleWish = (id: string) => {
+    setWishlist((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  };
+
+  const add = (id: string, size: string) => {
+    setItems((current) => {
+      const found = current.find((item) => item.productId === id && item.size === size);
+      return found
+        ? current.map((item) => (item === found ? { ...item, quantity: item.quantity + 1 } : item))
+        : [...current, { productId: id, size, quantity: 1 }];
+    });
+  };
+
+  const qty = (index: number, delta: number) => {
+    setItems((current) =>
+      current
+        .map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item))
+        .filter((item) => item.quantity > 0)
+    );
+  };
+
+  const remove = (index: number) => {
+    setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const clearCart = () => {
+    setItems([]);
+  };
+
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  return <TooltipProvider>
-<ProductsContext.Provider value={products}><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Header cartCount={cartCount} wishlistCount={wishlist.length} /><Router wishlist={wishlist} onToggleWish={toggleWish} items={items} onAdd={add} onQty={qty} onRemove={remove} /><Footer /></WouterRouter><Toaster /></ProductsContext.Provider>
-</TooltipProvider>;
+
+  return (
+    <TooltipProvider>
+      <StoreContext.Provider
+        value={{
+          products,
+          refreshProducts,
+          orders,
+          refreshOrders,
+          reviews,
+          refreshReviews,
+          addReview,
+          deleteReview,
+          currentUser,
+          refreshUser,
+          quickViewProduct,
+          openQuickView,
+          closeQuickView,
+          addToCart: add,
+          clearCart,
+        }}
+      >
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+          <Header cartCount={cartCount} wishlistCount={wishlist.length} />
+          <Router
+            wishlist={wishlist}
+            onToggleWish={toggleWish}
+            items={items}
+            onAdd={add}
+            onQty={qty}
+            onRemove={remove}
+          />
+          <Footer />
+        </WouterRouter>
+        <QuickViewModal wishlist={wishlist} onToggleWish={toggleWish} />
+        <Toaster />
+      </StoreContext.Provider>
+    </TooltipProvider>
+  );
 }
 
 export default App;

@@ -13,11 +13,13 @@
     "dev:api": "PORT=3001 npm run dev -w @workspace/api-server",
     "dev:web": "npm run dev -w @workspace/dirace-store",
     "build": "npm run typecheck && npm --workspaces --if-present run build",
+    "lint": "npm run typecheck",
     "typecheck:libs": "tsc --build",
     "typecheck": "npm run typecheck:libs && npm --workspaces --if-present run typecheck"
   },
   "dependencies": {
-    "@replit/connectors-sdk": "^0.4.3"
+    "@replit/connectors-sdk": "^0.4.3",
+    "@supabase/supabase-js": "^2.116.0"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
