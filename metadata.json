@@ -1,6 +1,6 @@
 {
   "name": "DIRACE Studio",
-  "description": "Luxury fashion studio and storefront powered by Supabase with database, authentication, storage, and studio admin controls.",
+  "description": "Luxury fashion studio and architectural storefront with catalog management, client orders, and client reflections.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

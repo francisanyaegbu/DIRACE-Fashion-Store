@@ -27,30 +27,33 @@ import {
   Star,
   MessageSquare,
   Eye,
+  Edit3,
+  ExternalLink,
+  Download,
+  Printer,
+  Loader2,
 } from 'lucide-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useRoute } from 'wouter';
 import NotFound from '@/pages/not-found';
 import {
   fetchProductsFromSupabase,
   addProductToSupabase,
+  updateProductInSupabase,
   fetchRecommendedProductsFromSupabase,
   deleteProductFromSupabase,
   uploadProductImageToSupabase,
   fetchOrdersFromSupabase,
   createOrderInSupabase,
   updateOrderStatusInSupabase,
-  seedProductsToSupabase,
+  deleteOrderFromSupabase,
   fetchReviewsFromSupabase,
   createReviewInSupabase,
   deleteReviewFromSupabase,
-  purgeDummyReviewsFromSupabase,
   isSupabaseConfigured,
   supabaseSignUp,
   supabaseSignIn,
-  supabaseSignInWithGoogle,
   supabaseSignOut,
   getSupabaseCurrentUser,
-  SUPABASE_SQL_SCHEMA,
   type Product,
   type Order,
   type Review,
@@ -63,8 +66,10 @@ export type CartItem = { productId: string; size: string; quantity: number };
 interface StoreContextType {
   products: Product[];
   refreshProducts: () => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
   orders: Order[];
   refreshOrders: () => Promise<void>;
+  deleteOrder: (orderId: string) => Promise<void>;
   reviews: Review[];
   refreshReviews: () => Promise<void>;
   addReview: (review: Omit<Review, 'id' | 'created_at'>) => Promise<Review>;
@@ -81,8 +86,10 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType>({
   products: [],
   refreshProducts: async () => {},
+  deleteProduct: async () => {},
   orders: [],
   refreshOrders: async () => {},
+  deleteOrder: async () => {},
   reviews: [],
   refreshReviews: async () => {},
   addReview: async () => ({} as Review),
@@ -120,9 +127,6 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
 
   return (
     <>
-      <div className="topbar">
-        Complimentary shipping on orders over {money(150000)} · Worldwide delivery
-      </div>
       <header className="nav">
         <div className="page-wrap nav-inner">
           <button
@@ -255,7 +259,7 @@ function Footer() {
               />
             </Link>
             <p className="muted" style={{ maxWidth: 220, fontSize: 12, lineHeight: 1.7, marginTop: 18 }}>
-              Clothing for the considered life. Designed in London. Powered by Supabase.
+              Clothing for the considered life. Designed in London.
             </p>
           </div>
           <div>
@@ -292,7 +296,7 @@ function Footer() {
           </div>
         </div>
         <div className="footer-bottom mono">
-          <span>© 2025 DIRACE STUDIO</span>
+          <span>© {new Date().getFullYear()} DIRACE STUDIO</span>
           <span>MADE TO BE WORN. NOT CONSUMED.</span>
         </div>
       </div>
@@ -385,6 +389,7 @@ function QuickViewModal({
 }) {
   const { quickViewProduct, closeQuickView, addToCart, reviews } = useStore();
   const [selectedSize, setSelectedSize] = useState<string>('');
+  const [isAdding, setIsAdding] = useState(false);
   const [added, setAdded] = useState(false);
 
   useEffect(() => {
@@ -420,9 +425,13 @@ function QuickViewModal({
       : null;
 
   const handleAdd = () => {
-    addToCart(quickViewProduct.id, selectedSize || quickViewProduct.sizes?.[0] || 'M');
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1800);
+    setIsAdding(true);
+    setTimeout(() => {
+      addToCart(quickViewProduct.id, selectedSize || quickViewProduct.sizes?.[0] || 'M');
+      setIsAdding(false);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1800);
+    }, 280);
   };
 
   return (
@@ -567,10 +576,15 @@ function QuickViewModal({
                   justifyContent: 'center',
                   gap: 8,
                 }}
+                disabled={isAdding}
                 onClick={handleAdd}
                 data-testid={`button-quick-view-add-to-bag-${quickViewProduct.id}`}
               >
-                {added ? (
+                {isAdding ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Adding to Bag...
+                  </>
+                ) : added ? (
                   <>
                     <Check size={14} /> Added to Bag
                   </>
@@ -667,13 +681,21 @@ function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
       </section>
       <div className="marquee">
         <div className="marquee-track">
-          <span>DIRACE / WEAR WHAT DEFINES YOU</span>
+          <span>DIRACE IS LAW</span>
           <span className="dot">·</span>
-          <span>DIRACE / SUPABASE EQUIPPED</span>
+          <span>DIRACE IS LAW</span>
           <span className="dot">·</span>
-          <span>DIRACE / WEAR WHAT DEFINES YOU</span>
+          <span>DIRACE IS LAW</span>
           <span className="dot">·</span>
-          <span>DIRACE / THE LATEST DROP</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
         </div>
       </div>
       <section className="section page-wrap">
@@ -786,7 +808,19 @@ function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
 
 function Signup() {
   const [email, setEmail] = useState('');
+  const [subscribing, setSubscribing] = useState(false);
   const [sent, setSent] = useState(false);
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (email) {
+      setSubscribing(true);
+      setTimeout(() => {
+        setSubscribing(false);
+        setSent(true);
+      }, 500);
+    }
+  };
 
   return (
     <div className="page-wrap">
@@ -800,13 +834,7 @@ function Signup() {
             <Check size={14} style={{ verticalAlign: 'middle' }} /> You're on the list.
           </div>
         ) : (
-          <form
-            className="newsletter-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (email) setSent(true);
-            }}
-          >
+          <form className="newsletter-form" onSubmit={handleSubmit}>
             <input
               type="email"
               placeholder="Your email address"
@@ -814,9 +842,18 @@ function Signup() {
               onChange={(event) => setEmail(event.target.value)}
               aria-label="Email address"
               data-testid="input-newsletter-email"
+              disabled={subscribing}
             />
-            <button type="submit" data-testid="button-newsletter-submit">
-              Subscribe <ArrowRight size={13} style={{ verticalAlign: 'middle' }} />
+            <button type="submit" disabled={subscribing} data-testid="button-newsletter-submit">
+              {subscribing ? (
+                <>
+                  Subscribing... <Loader2 size={13} className="animate-spin" style={{ verticalAlign: 'middle' }} />
+                </>
+              ) : (
+                <>
+                  Subscribe <ArrowRight size={13} style={{ verticalAlign: 'middle' }} />
+                </>
+              )}
             </button>
           </form>
         )}
@@ -883,6 +920,7 @@ function ProductDetail({
   const [, params] = useRoute('/product/:id');
   const product = products.find((item) => item.id === params?.id);
   const [size, setSize] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
   const [added, setAdded] = useState(false);
 
   // Reviews state
@@ -953,9 +991,13 @@ function ProductDetail({
 
   const selectedSize = size || (product.sizes && product.sizes[0]) || 'M';
   const add = () => {
-    onAdd(product.id, selectedSize);
-    setAdded(true);
-    window.setTimeout(() => setAdded(false), 1800);
+    setIsAdding(true);
+    window.setTimeout(() => {
+      onAdd(product.id, selectedSize);
+      setIsAdding(false);
+      setAdded(true);
+      window.setTimeout(() => setAdded(false), 1800);
+    }, 280);
   };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
@@ -992,13 +1034,13 @@ function ProductDetail({
       setRating(5);
       setReviewFeedback({
         type: 'success',
-        message: 'Your review has been successfully published and saved directly to the Supabase "reviews" table.',
+        message: 'Your review has been successfully published and added to the archive.',
       });
       window.setTimeout(() => setReviewFeedback(null), 5000);
     } catch (err: any) {
       setReviewFeedback({
         type: 'error',
-        message: err?.message || 'Failed to record review to Supabase.',
+        message: err?.message || 'Failed to submit review. Please try again.',
       });
     } finally {
       setSubmittingReview(false);
@@ -1085,12 +1127,19 @@ function ProductDetail({
               </button>
             ))}
           </div>
-          <button className="primary-btn full-btn" onClick={add} data-testid={`button-add-${product.id}`}>
-            {added ? 'Added to bag' : 'Add to bag'}{' '}
-            {added ? (
-              <Check size={14} style={{ verticalAlign: 'middle' }} />
+          <button className="primary-btn full-btn" onClick={add} disabled={isAdding} data-testid={`button-add-${product.id}`}>
+            {isAdding ? (
+              <>
+                Adding to bag... <Loader2 size={14} className="animate-spin" style={{ verticalAlign: 'middle' }} />
+              </>
+            ) : added ? (
+              <>
+                Added to bag <Check size={14} style={{ verticalAlign: 'middle' }} />
+              </>
             ) : (
-              <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+              <>
+                Add to bag <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+              </>
             )}
           </button>
           <button
@@ -1110,7 +1159,7 @@ function ProductDetail({
               Material & care <Plus size={14} />
             </div>
             <div className="accordion">
-              Shipping & complimentary delivery over {money(150000)} <Plus size={14} />
+              Shipping & courier delivery <Plus size={14} />
             </div>
             <div className="accordion">
               The DIRACE standard <Plus size={14} />
@@ -1143,15 +1192,14 @@ function ProductDetail({
             <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span>DIRACE / {product.category} Archive</span>
               <span className="muted">·</span>
-              <span className="muted">Supabase Match</span>
+              <span className="muted">Curated Match</span>
             </div>
             <h2 className="display" style={{ fontSize: 36, margin: '8px 0 4px', textTransform: 'uppercase' }}>
               RECOMMENDED FOR YOU
             </h2>
             <p className="muted" style={{ fontSize: 13, maxWidth: 520, lineHeight: 1.6 }}>
               Curated silhouettes and complementary tailoring from the{' '}
-              <strong style={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{product.category}</strong> collection
-              in the Supabase database.
+              <strong style={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{product.category}</strong> collection.
             </p>
           </div>
 
@@ -1161,16 +1209,14 @@ function ProductDetail({
               style={{
                 fontSize: 10,
                 padding: '6px 12px',
-                background: isSupabaseConfigured() ? 'hsl(142 70% 45% / .12)' : 'hsl(0 0% 92%)',
-                color: isSupabaseConfigured() ? 'hsl(142 76% 36%)' : 'inherit',
+                background: 'hsl(0 0% 92%)',
                 border: '1px solid hsl(var(--border))',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
               }}
             >
-              <Database size={11} />
-              <span>SUPABASE '{product.category.toUpperCase()}' ({recommended.length} PIECES)</span>
+              <span>{product.category.toUpperCase()} ARCHIVE ({recommended.length} PIECES)</span>
             </div>
           </div>
         </div>
@@ -1233,12 +1279,12 @@ function ProductDetail({
       <section className="product-reviews-section" style={{ marginTop: 80, borderTop: '1px solid hsl(var(--border))', paddingTop: 64 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 24, marginBottom: 40 }}>
           <div>
-            <div className="eyebrow accent">Supabase 'reviews' table · Verified Client Reflections</div>
+            <div className="eyebrow accent">Verified Client Reflections</div>
             <h2 className="display" style={{ fontSize: 38, margin: '8px 0 4px' }}>
               CLIENT REVIEWS & ARCHIVE NOTES
             </h2>
             <p className="muted" style={{ fontSize: 13, maxWidth: 540, lineHeight: 1.6 }}>
-              Authentic reflections persisted directly in our Supabase database from authenticated clients.
+              Authentic reflections submitted by verified clients and archival collectors.
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1247,16 +1293,15 @@ function ProductDetail({
               style={{
                 fontSize: 10,
                 padding: '5px 12px',
-                background: isSupabaseConfigured() ? 'hsl(142 70% 45% / .15)' : 'hsl(0 0% 90%)',
-                color: isSupabaseConfigured() ? 'hsl(142 76% 36%)' : 'inherit',
+                background: 'hsl(0 0% 92%)',
                 border: '1px solid hsl(var(--border))',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
               }}
             >
-              <Database size={11} />
-              {isSupabaseConfigured() ? "SUPABASE 'reviews' LIVE" : "SUPABASE 'reviews' READY"}
+              <ShieldCheck size={12} />
+              VERIFIED ARCHIVE REVIEWS
             </div>
           </div>
         </div>
@@ -1380,7 +1425,7 @@ function ProductDetail({
                       {currentUser.user_metadata?.full_name || currentUser.email}
                     </div>
                     <div className="muted" style={{ fontSize: 10 }}>
-                      Authenticated with Supabase
+                      Verified Client Session
                     </div>
                   </div>
                 </div>
@@ -1456,8 +1501,15 @@ function ProductDetail({
                   disabled={submittingReview}
                   style={{ marginTop: 4 }}
                 >
-                  {submittingReview ? 'Recording to Supabase...' : 'Submit Review to Supabase'}{' '}
-                  <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                  {submittingReview ? (
+                    <>
+                      Recording Reflection... <Loader2 size={14} className="animate-spin" style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                    </>
+                  ) : (
+                    <>
+                      Submit Reflection <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                    </>
+                  )}
                 </button>
               </form>
             ) : (
@@ -1477,7 +1529,7 @@ function ProductDetail({
                     </strong>
                   </div>
                   <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, margin: 0 }}>
-                    To ensure the integrity of the Supabase archive, product reviews can only be posted by authenticated users.
+                    To ensure the integrity of the archive, reflections can only be posted by authenticated clients.
                   </p>
                 </div>
 
@@ -1553,7 +1605,13 @@ function ProductDetail({
                       />
                     </div>
                     <button type="submit" className="primary-btn full-btn" disabled={quickAuthLoading} style={{ marginTop: 4 }}>
-                      {quickAuthLoading ? 'Authenticating with Supabase...' : quickAuthMode === 'signin' ? 'Sign In & Unlock Reviews' : 'Create Account & Unlock'}
+                      {quickAuthLoading ? (
+                        <>
+                          Authenticating... <Loader2 size={13} className="animate-spin" style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                        </>
+                      ) : (
+                        quickAuthMode === 'signin' ? 'Sign In & Unlock Reviews' : 'Create Account & Unlock'
+                      )}
                     </button>
                   </form>
 
@@ -1574,7 +1632,7 @@ function ProductDetail({
                 Archive Reflections ({productReviews.length})
               </div>
               <div className="mono muted" style={{ fontSize: 10 }}>
-                Saved in Supabase 'reviews' table
+                Verified client reflections
               </div>
             </div>
 
@@ -1592,7 +1650,7 @@ function ProductDetail({
                   NO REFLECTIONS YET
                 </h3>
                 <p className="muted" style={{ fontSize: 12, marginTop: 8, maxWidth: 360, margin: '8px auto 0' }}>
-                  Be the first authenticated client to record your review in the Supabase 'reviews' table for this piece.
+                  Be the first verified client to record your review for this piece.
                 </p>
               </div>
             ) : (
@@ -1822,6 +1880,16 @@ function About() {
 
 function Contact() {
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setTimeout(() => {
+      setSubmitting(false);
+      setSent(true);
+    }, 600);
+  };
 
   return (
     <main className="page-wrap">
@@ -1856,27 +1924,29 @@ function Contact() {
               <p>We'll be in touch within two working days.</p>
             </div>
           ) : (
-            <form
-              className="contact-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setSent(true);
-              }}
-            >
+            <form className="contact-form" onSubmit={handleSubmit}>
               <div className="field">
                 <label htmlFor="name">Your name</label>
-                <input id="name" required data-testid="input-contact-name" />
+                <input id="name" required data-testid="input-contact-name" disabled={submitting} />
               </div>
               <div className="field">
                 <label htmlFor="email">Email address</label>
-                <input id="email" type="email" required data-testid="input-contact-email" />
+                <input id="email" type="email" required data-testid="input-contact-email" disabled={submitting} />
               </div>
               <div className="field">
                 <label htmlFor="message">Message</label>
-                <textarea id="message" required data-testid="input-contact-message" />
+                <textarea id="message" required data-testid="input-contact-message" disabled={submitting} />
               </div>
-              <button className="primary-btn" type="submit" data-testid="button-contact-submit">
-                Send message <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+              <button className="primary-btn" type="submit" disabled={submitting} data-testid="button-contact-submit">
+                {submitting ? (
+                  <>
+                    Sending message... <Loader2 size={14} className="animate-spin" style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                  </>
+                ) : (
+                  <>
+                    Send message <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+                  </>
+                )}
               </button>
             </form>
           )}
@@ -1933,8 +2003,7 @@ function Cart({
     .filter((item) => Boolean(item.product));
 
   const subtotal = detailed.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const freeShippingThreshold = 150000; // ₦150,000
-  const shippingFee = subtotal >= freeShippingThreshold ? 0 : 5000;
+  const shippingFee = 5000;
   const grandTotal = subtotal + shippingFee;
 
   return (
@@ -2004,8 +2073,8 @@ function Cart({
               <span>{money(subtotal)}</span>
             </div>
             <div className="summary-row">
-              <span>Shipping</span>
-              <span>{subtotal >= freeShippingThreshold ? 'Complimentary' : money(shippingFee)}</span>
+              <span>Standard Delivery</span>
+              <span>{money(shippingFee)}</span>
             </div>
             <div className="summary-row summary-total">
               <span>Total</span>
@@ -2076,7 +2145,7 @@ function Checkout({ items }: { items: CartItem[] }) {
     .filter((item) => Boolean(item.product));
 
   const subtotal = detailedItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const shippingFee = subtotal >= 150000 ? 0 : 5000;
+  const shippingFee = 5000;
   const total = subtotal + shippingFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2131,7 +2200,7 @@ function Checkout({ items }: { items: CartItem[] }) {
               Reference number: <strong className="mono">{orderId}</strong>
             </p>
             <p className="muted" style={{ maxWidth: 440, margin: '14px auto 0', lineHeight: 1.8 }}>
-              Your order has been recorded into Supabase. A confirmation email and shipping updates will be dispatched to{' '}
+              Your order has been recorded. A confirmation email and shipping updates will be dispatched to{' '}
               <strong>{form.email || 'your email'}</strong>.
             </p>
             <div style={{ marginTop: 32, display: 'flex', gap: 16, justifyContent: 'center' }}>
@@ -2250,8 +2319,15 @@ function Checkout({ items }: { items: CartItem[] }) {
             />
           </div>
           <button className="primary-btn" type="submit" disabled={submitting} data-testid="button-place-order">
-            {submitting ? 'Placing order in Supabase...' : `Place order · ${money(total)}`}{' '}
-            <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+            {submitting ? (
+              <>
+                Placing order... <Loader2 size={14} className="animate-spin" style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+              </>
+            ) : (
+              <>
+                {`Place order · ${money(total)}`} <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+              </>
+            )}
           </button>
         </form>
         <aside className="cart-summary">
@@ -2265,15 +2341,15 @@ function Checkout({ items }: { items: CartItem[] }) {
             </div>
           ))}
           <div className="summary-row">
-            <span>Shipping</span>
-            <span>{subtotal >= 150000 ? 'Complimentary' : money(shippingFee)}</span>
+            <span>Standard Delivery</span>
+            <span>{money(shippingFee)}</span>
           </div>
           <div className="summary-row summary-total">
             <span>Total amount</span>
             <span>{money(total)}</span>
           </div>
           <div className="mono muted" style={{ marginTop: 14, fontSize: 10 }}>
-            Syncs to Supabase Orders database
+            Instant order confirmation & tracking
           </div>
         </aside>
       </div>
@@ -2343,6 +2419,8 @@ function Account() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [submittingAuth, setSubmittingAuth] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   useEffect(() => {
@@ -2355,44 +2433,43 @@ function Account() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMessage(null);
+    setSubmittingAuth(true);
 
-    if (mode === 'signup') {
-      const res = await supabaseSignUp(email, password, fullName);
-      if (res.error) {
-        setStatusMessage({ type: 'error', text: res.error });
+    try {
+      if (mode === 'signup') {
+        const res = await supabaseSignUp(email, password, fullName);
+        if (res.error) {
+          setStatusMessage({ type: 'error', text: res.error });
+        } else {
+          setUser(res.user);
+          await refreshUser();
+          setStatusMessage({ type: 'success', text: 'Account created successfully.' });
+        }
       } else {
-        setUser(res.user);
-        await refreshUser();
-        setStatusMessage({ type: 'success', text: 'Supabase account created successfully.' });
+        const res = await supabaseSignIn(email, password);
+        if (res.error) {
+          setStatusMessage({ type: 'error', text: res.error });
+        } else {
+          setUser(res.user);
+          await refreshUser();
+          setStatusMessage({ type: 'success', text: 'Welcome back to your DIRACE space.' });
+        }
       }
-    } else {
-      const res = await supabaseSignIn(email, password);
-      if (res.error) {
-        setStatusMessage({ type: 'error', text: res.error });
-      } else {
-        setUser(res.user);
-        await refreshUser();
-        setStatusMessage({ type: 'success', text: 'Welcome back to your DIRACE space.' });
-      }
-    }
-  };
-
-  const handleGoogle = async () => {
-    const res = await supabaseSignInWithGoogle();
-    if (res.error) {
-      setStatusMessage({ type: 'error', text: res.error });
-    } else {
-      const u = await getSupabaseCurrentUser();
-      setUser(u);
-      await refreshUser();
+    } finally {
+      setSubmittingAuth(false);
     }
   };
 
   const handleSignOut = async () => {
-    await supabaseSignOut();
-    setUser(null);
-    await refreshUser();
-    setStatusMessage(null);
+    setSigningOut(true);
+    try {
+      await supabaseSignOut();
+      setUser(null);
+      await refreshUser();
+      setStatusMessage(null);
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   const userOrders = orders.filter((o) => o.customer_email?.toLowerCase() === user?.email?.toLowerCase());
@@ -2406,18 +2483,17 @@ function Account() {
       <div className="content-narrow">
         <div className="account-panel" style={{ maxWidth: 640 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="eyebrow accent">Supabase Authentication</div>
+            <div className="eyebrow accent">Client Authentication</div>
             <div
               className="mono"
               style={{
                 fontSize: 9,
                 padding: '3px 8px',
-                background: isSupabaseConfigured() ? 'hsl(142 70% 45% / .15)' : 'hsl(0 0% 90%)',
-                color: isSupabaseConfigured() ? 'hsl(142 76% 36%)' : 'inherit',
+                background: 'hsl(0 0% 92%)',
                 border: '1px solid hsl(var(--border))',
               }}
             >
-              {isSupabaseConfigured() ? 'SUPABASE LIVE' : 'SUPABASE READY'}
+              CLIENT ARCHIVE PORTAL
             </div>
           </div>
 
@@ -2450,7 +2526,7 @@ function Account() {
 
               <div className="rule" style={{ margin: '28px 0' }} />
 
-              <div className="eyebrow accent">Order History (Supabase Database)</div>
+              <div className="eyebrow accent">Order History</div>
               {userOrders.length > 0 ? (
                 <div style={{ display: 'grid', gap: 14, marginTop: 14 }}>
                   {userOrders.map((order) => (
@@ -2487,13 +2563,19 @@ function Account() {
                 </div>
               ) : (
                 <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                  No past orders found in Supabase for this account.
+                  No past orders recorded for this account.
                 </p>
               )}
 
               <div style={{ marginTop: 36, display: 'flex', gap: 14 }}>
-                <button className="secondary-btn" onClick={handleSignOut}>
-                  Sign Out
+                <button className="secondary-btn" onClick={handleSignOut} disabled={signingOut}>
+                  {signingOut ? (
+                    <>
+                      Signing Out... <Loader2 size={13} className="animate-spin" style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                    </>
+                  ) : (
+                    'Sign Out'
+                  )}
                 </button>
                 <Link href="/shop" className="primary-btn">
                   Explore New Pieces
@@ -2525,7 +2607,7 @@ function Account() {
                 {mode === 'signin' ? 'WELCOME BACK.' : 'JOIN THE ARCHIVE.'}
               </h2>
               <p className="muted" style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>
-                Directly authenticated with Supabase Auth. Seamless access across all your sessions.
+                Access your personal archive, bespoke curation, and past dispatches.
               </p>
 
               {statusMessage && (
@@ -2578,19 +2660,20 @@ function Account() {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
-                <button className="primary-btn full-btn" type="submit" style={{ marginTop: 8 }}>
-                  {mode === 'signin' ? 'Sign In to Supabase' : 'Create Supabase Account'}{' '}
-                  <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+                <button className="primary-btn full-btn" type="submit" disabled={submittingAuth} style={{ marginTop: 8 }}>
+                  {submittingAuth ? (
+                    <>
+                      {mode === 'signin' ? 'Signing In...' : 'Creating Account...'}{' '}
+                      <Loader2 size={14} className="animate-spin" style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                    </>
+                  ) : (
+                    <>
+                      {mode === 'signin' ? 'Sign In' : 'Create Account'}{' '}
+                      <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 6 }} />
+                    </>
+                  )}
                 </button>
               </form>
-
-              <div style={{ textAlign: 'center', margin: '22px 0 16px' }} className="mono muted">
-                — OR —
-              </div>
-
-              <button className="secondary-btn full-btn" onClick={handleGoogle} type="button">
-                Continue with Google OAuth
-              </button>
             </div>
           )}
         </div>
@@ -2600,8 +2683,43 @@ function Account() {
 }
 
 function Admin() {
-  const { products, refreshProducts, orders, refreshOrders, reviews, refreshReviews, deleteReview } = useStore();
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'supabase' | 'reviews'>('inventory');
+  const {
+    products,
+    refreshProducts,
+    deleteProduct,
+    orders,
+    refreshOrders,
+    deleteOrder,
+    reviews,
+    refreshReviews,
+    deleteReview,
+  } = useStore();
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'reviews'>('inventory');
+
+  // Delete Confirmation Modal State
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: 'piece' | 'order' | 'review';
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Search & Filter States
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryCategory, setInventoryCategory] = useState('All');
+
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('All');
+
+  const [reviewSearch, setReviewSearch] = useState('');
+  const [reviewRatingFilter, setReviewRatingFilter] = useState('All');
+  const [refreshingReviews, setRefreshingReviews] = useState(false);
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [isExportingOrders, setIsExportingOrders] = useState(false);
+  const [isExportingReviews, setIsExportingReviews] = useState(false);
+  const [isAddingPiece, setIsAddingPiece] = useState(false);
+  const [isUpdatingPiece, setIsUpdatingPiece] = useState(false);
 
   // New Piece Form State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -2616,111 +2734,314 @@ function Admin() {
     sizes: 'S, M, L, XL',
   });
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
-  const [copiedSql, setCopiedSql] = useState(false);
-  const [seedingStatus, setSeedingStatus] = useState<string | null>(null);
-  const [seedingReviews, setSeedingReviews] = useState(false);
-  const [reviewsStatusMessage, setReviewsStatusMessage] = useState<string | null>(null);
+
+  // Edit Piece Form State
+  const [editingPiece, setEditingPiece] = useState<Product | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    category: 'Outerwear',
+    price: 250000,
+    description: '',
+    badge: '',
+    image: '',
+    sizes: '',
+  });
+  const [isEditUploading, setIsEditUploading] = useState(false);
+  const [editUploadFeedback, setEditUploadFeedback] = useState<string | null>(null);
+
+  // Order Inspector State
+  const [inspectedOrder, setInspectedOrder] = useState<Order | null>(null);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
-  const isConfigured = isSupabaseConfigured();
 
+  // Filtered lists
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchSearch =
+        inventorySearch === '' ||
+        p.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+        p.id.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+        p.category.toLowerCase().includes(inventorySearch.toLowerCase());
+      const matchCategory = inventoryCategory === 'All' || p.category.toLowerCase() === inventoryCategory.toLowerCase();
+      return matchSearch && matchCategory;
+    });
+  }, [products, inventorySearch, inventoryCategory]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const matchSearch =
+        orderSearch === '' ||
+        o.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (o.customer_name || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (o.customer_email || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (o.shipping_address || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (o.city || '').toLowerCase().includes(orderSearch.toLowerCase());
+      const matchStatus = orderStatusFilter === 'All' || o.status === orderStatusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [orders, orderSearch, orderStatusFilter]);
+
+  const filteredReviews = useMemo(() => {
+    return reviews.filter((r) => {
+      const prod = products.find((p) => p.id === r.product_id);
+      const matchSearch =
+        reviewSearch === '' ||
+        (r.user_name || '').toLowerCase().includes(reviewSearch.toLowerCase()) ||
+        (r.user_email || '').toLowerCase().includes(reviewSearch.toLowerCase()) ||
+        (r.comment || '').toLowerCase().includes(reviewSearch.toLowerCase()) ||
+        (prod?.name || '').toLowerCase().includes(reviewSearch.toLowerCase());
+      const matchRating = reviewRatingFilter === 'All' || r.rating === Number(reviewRatingFilter);
+      return matchSearch && matchRating;
+    });
+  }, [reviews, products, reviewSearch, reviewRatingFilter]);
+
+  // Handlers
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
-    setUploadFeedback('Uploading to Supabase Storage bucket "products"...');
+    setUploadFeedback('Uploading piece imagery...');
 
     const res = await uploadProductImageToSupabase(file);
     if (res.url) {
       setNewPiece((prev) => ({ ...prev, image: res.url! }));
-      setUploadFeedback(res.error ? `Notice: ${res.error}` : 'Image uploaded to Supabase Storage!');
+      setUploadFeedback('Image uploaded successfully!');
     } else {
       setUploadFeedback(`Storage error: ${res.error}`);
     }
     setIsUploading(false);
   };
 
-  const handleAddPiece = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const sizesArray = newPiece.sizes.split(',').map((s) => s.trim()).filter(Boolean);
+  const handleEditFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    await addProductToSupabase({
-      name: newPiece.name,
-      category: newPiece.category,
-      price: Number(newPiece.price),
-      description: newPiece.description,
-      badge: newPiece.badge || undefined,
-      image: newPiece.image,
-      alt: newPiece.name,
-      sizes: sizesArray.length > 0 ? sizesArray : ['S', 'M', 'L'],
-    });
+    setIsEditUploading(true);
+    setEditUploadFeedback('Uploading piece imagery...');
 
-    setShowAddModal(false);
-    setNewPiece({
-      name: '',
-      category: 'Outerwear',
-      price: 250000,
-      description: '',
-      badge: 'New Arrival',
-      image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80',
-      sizes: 'S, M, L, XL',
-    });
-    await refreshProducts();
+    const res = await uploadProductImageToSupabase(file);
+    if (res.url) {
+      setEditForm((prev) => ({ ...prev, image: res.url! }));
+      setEditUploadFeedback('Image updated successfully!');
+    } else {
+      setEditUploadFeedback(`Upload error: ${res.error}`);
+    }
+    setIsEditUploading(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Remove this piece from Supabase?')) {
-      await deleteProductFromSupabase(id);
+  const handleAddPiece = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAddingPiece(true);
+    try {
+      const sizesArray = newPiece.sizes.split(',').map((s) => s.trim()).filter(Boolean);
+
+      await addProductToSupabase({
+        name: newPiece.name,
+        category: newPiece.category,
+        price: Number(newPiece.price),
+        description: newPiece.description,
+        badge: newPiece.badge || undefined,
+        image: newPiece.image,
+        alt: newPiece.name,
+        sizes: sizesArray.length > 0 ? sizesArray : ['S', 'M', 'L'],
+      });
+
+      setShowAddModal(false);
+      setNewPiece({
+        name: '',
+        category: 'Outerwear',
+        price: 250000,
+        description: '',
+        badge: 'New Arrival',
+        image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80',
+        sizes: 'S, M, L, XL',
+      });
       await refreshProducts();
+    } finally {
+      setIsAddingPiece(false);
+    }
+  };
+
+  const handleStartEdit = (p: Product) => {
+    setEditingPiece(p);
+    setEditForm({
+      name: p.name,
+      category: p.category,
+      price: p.price,
+      description: p.description || '',
+      badge: p.badge || '',
+      image: p.image,
+      sizes: Array.isArray(p.sizes) ? p.sizes.join(', ') : 'S, M, L',
+    });
+    setEditUploadFeedback(null);
+  };
+
+  const handleUpdatePiece = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPiece) return;
+    setIsUpdatingPiece(true);
+
+    try {
+      const sizesArray = editForm.sizes.split(',').map((s) => s.trim()).filter(Boolean);
+
+      await updateProductInSupabase(editingPiece.id, {
+        name: editForm.name,
+        category: editForm.category,
+        price: Number(editForm.price),
+        description: editForm.description,
+        badge: editForm.badge || undefined,
+        image: editForm.image,
+        alt: editForm.name,
+        sizes: sizesArray.length > 0 ? sizesArray : ['S', 'M', 'L'],
+      });
+
+      setEditingPiece(null);
+      await refreshProducts();
+    } finally {
+      setIsUpdatingPiece(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+    const { type, id } = deleteConfirm;
+    setDeletingId(id);
+    try {
+      if (type === 'piece') {
+        await deleteProduct(id);
+      } else if (type === 'order') {
+        await deleteOrder(id);
+        if (inspectedOrder?.id === id) {
+          setInspectedOrder(null);
+        }
+      } else if (type === 'review') {
+        await deleteReview(id);
+      }
+    } catch (err) {
+      console.error('Deletion error:', err);
+    } finally {
+      setDeletingId(null);
+      setDeleteConfirm(null);
     }
   };
 
   const handleStatusChange = async (orderId: string, status: Order['status']) => {
-    await updateOrderStatusInSupabase(orderId, status);
-    await refreshOrders();
-  };
-
-  const handleSeedCatalog = async () => {
-    setSeedingStatus('Seeding catalog to Supabase products table...');
-    const res = await seedProductsToSupabase();
-    if (res.success) {
-      setSeedingStatus(`Success! Seeded ${res.count} pieces to Supabase.`);
-      await refreshProducts();
-    } else {
-      setSeedingStatus(`Seed response: ${res.error}`);
+    setUpdatingStatusId(`${orderId}-${status}`);
+    try {
+      await updateOrderStatusInSupabase(orderId, status);
+      if (inspectedOrder && inspectedOrder.id === orderId) {
+        setInspectedOrder({ ...inspectedOrder, status });
+      }
+      await refreshOrders();
+    } finally {
+      setUpdatingStatusId(null);
     }
   };
 
-  const handlePurgeDummyReviews = async () => {
-    setSeedingReviews(true);
-    setReviewsStatusMessage('Purging any legacy dummy data from Supabase & local cache...');
-    const res = await purgeDummyReviewsFromSupabase();
-    await refreshReviews();
-    setReviewsStatusMessage('All dummy reviews purged. Only authentic client reflections will display.');
-    setSeedingReviews(false);
+  const exportOrdersCSV = () => {
+    if (filteredOrders.length === 0) {
+      alert('No orders available to export.');
+      return;
+    }
+    setIsExportingOrders(true);
+    setTimeout(() => {
+      try {
+        const headers = ['Order ID', 'Date', 'Customer Name', 'Email', 'Shipping Address', 'City', 'Postcode', 'Items', 'Total (NGN)', 'Status'];
+        const rows = filteredOrders.map((o) => [
+          `"${o.id}"`,
+          `"${new Date(o.created_at).toISOString().slice(0, 10)}"`,
+          `"${(o.customer_name || '').replace(/"/g, '""')}"`,
+          `"${(o.customer_email || '').replace(/"/g, '""')}"`,
+          `"${(o.shipping_address || '').replace(/"/g, '""')}"`,
+          `"${(o.city || '').replace(/"/g, '""')}"`,
+          `"${(o.postcode || '').replace(/"/g, '""')}"`,
+          `"${(o.items?.map((it) => `${it.name} (${it.size}) x${it.quantity}`).join('; ') || '').replace(/"/g, '""')}"`,
+          `"${o.total_amount}"`,
+          `"${o.status}"`,
+        ]);
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `dirace_orders_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } finally {
+        setIsExportingOrders(false);
+      }
+    }, 250);
   };
 
-  const copySql = () => {
-    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2500);
+  const exportReviewsCSV = () => {
+    if (filteredReviews.length === 0) {
+      alert('No reflections available to export.');
+      return;
+    }
+    setIsExportingReviews(true);
+    setTimeout(() => {
+      try {
+        const headers = ['Review ID', 'Piece ID', 'Piece Name', 'Rating', 'Client Name', 'Email', 'Reflection', 'Date'];
+        const rows = filteredReviews.map((r) => {
+          const prod = products.find((p) => p.id === r.product_id);
+          return [
+            `"${r.id}"`,
+            `"${r.product_id}"`,
+            `"${(prod?.name || '').replace(/"/g, '""')}"`,
+            `"${r.rating}"`,
+            `"${(r.user_name || '').replace(/"/g, '""')}"`,
+            `"${(r.user_email || '').replace(/"/g, '""')}"`,
+            `"${(r.comment || '').replace(/"/g, '""')}"`,
+            `"${new Date(r.created_at).toISOString().slice(0, 10)}"`,
+          ];
+        });
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `dirace_reflections_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } finally {
+        setIsExportingReviews(false);
+      }
+    }, 250);
+  };
+
+  const handleRefreshOrdersWithFeedback = async () => {
+    setRefreshingOrders(true);
+    await refreshOrders();
+    window.setTimeout(() => setRefreshingOrders(false), 600);
+  };
+
+  const handleCopyAddress = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedAddress(true);
+    window.setTimeout(() => setCopiedAddress(false), 2000);
+  };
+
+  const handleRefreshReviewsWithFeedback = async () => {
+    setRefreshingReviews(true);
+    await refreshReviews();
+    window.setTimeout(() => setRefreshingReviews(false), 600);
   };
 
   return (
     <main className="page-wrap" style={{ paddingBottom: 120 }}>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
         <div>
           <div className="eyebrow accent">DIRACE / Studio</div>
           <h1 className="display">CONTROL ROOM.</h1>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <span
             className="mono"
             style={{
               padding: '6px 12px',
-              background: isConfigured ? 'hsl(142 70% 45% / .12)' : 'hsl(0 0% 92%)',
-              color: isConfigured ? 'hsl(142 76% 36%)' : 'inherit',
+              background: 'hsl(0 0% 92%)',
               border: '1px solid hsl(var(--border))',
               display: 'inline-flex',
               alignItems: 'center',
@@ -2728,8 +3049,8 @@ function Admin() {
               fontSize: 11,
             }}
           >
-            <Database size={13} />
-            {isConfigured ? 'Supabase: Connected' : 'Supabase: Ready for Keys'}
+            <ShieldCheck size={13} />
+            Archive: Studio Live
           </span>
           <span
             className="mono"
@@ -2748,22 +3069,52 @@ function Admin() {
         </div>
       </div>
 
-      {/* Metrics Row */}
+      {/* Metrics Row - Fully Interactive */}
       <div className="admin-grid" style={{ marginTop: 32 }}>
-        <div className="stat-card">
-          <div className="eyebrow accent">Revenue / Recorded</div>
+        <div
+          className="stat-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setActiveTab('orders')}
+          title="Click to inspect dispatches and revenue"
+          style={{ cursor: 'pointer', transition: 'all .15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="eyebrow accent">Revenue / Recorded</div>
+            <ArrowRight size={13} className="muted" />
+          </div>
           <strong>{money(totalRevenue)}</strong>
-          <span className="mono muted">Supabase Orders stream</span>
+          <span className="mono muted">Recorded checkout volume &rarr;</span>
         </div>
-        <div className="stat-card">
-          <div className="eyebrow accent">Customer Orders</div>
+        <div
+          className="stat-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setActiveTab('orders')}
+          title="Click to view all client orders"
+          style={{ cursor: 'pointer', transition: 'all .15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="eyebrow accent">Customer Orders</div>
+            <ArrowRight size={13} className="muted" />
+          </div>
           <strong>{orders.length}</strong>
-          <span className="mono muted">Active client dispatches</span>
+          <span className="mono muted">Active client dispatches &rarr;</span>
         </div>
-        <div className="stat-card">
-          <div className="eyebrow accent">Pieces in Catalog</div>
+        <div
+          className="stat-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setActiveTab('inventory')}
+          title="Click to manage catalog inventory"
+          style={{ cursor: 'pointer', transition: 'all .15s ease' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="eyebrow accent">Pieces in Catalog</div>
+            <ArrowRight size={13} className="muted" />
+          </div>
           <strong>{products.length}</strong>
-          <span className="mono muted">Supabase Products table</span>
+          <span className="mono muted">Live catalog pieces &rarr;</span>
         </div>
       </div>
 
@@ -2774,6 +3125,7 @@ function Admin() {
           gap: 20,
           borderBottom: '1px solid hsl(var(--border))',
           margin: '32px 0 28px',
+          overflowX: 'auto',
         }}
       >
         <button
@@ -2784,10 +3136,12 @@ function Admin() {
             padding: '12px 4px',
             borderBottom: activeTab === 'inventory' ? '2px solid hsl(var(--foreground))' : 'none',
             fontWeight: activeTab === 'inventory' ? 600 : 400,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
           onClick={() => setActiveTab('inventory')}
         >
-          01 / Inventory & Storage
+          01 / Inventory & Pieces ({products.length})
         </button>
         <button
           className={`mono ${activeTab === 'orders' ? 'accent' : 'muted'}`}
@@ -2797,23 +3151,12 @@ function Admin() {
             padding: '12px 4px',
             borderBottom: activeTab === 'orders' ? '2px solid hsl(var(--foreground))' : 'none',
             fontWeight: activeTab === 'orders' ? 600 : 400,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
           onClick={() => setActiveTab('orders')}
         >
           02 / Client Orders ({orders.length})
-        </button>
-        <button
-          className={`mono ${activeTab === 'supabase' ? 'accent' : 'muted'}`}
-          style={{
-            background: 'none',
-            border: 0,
-            padding: '12px 4px',
-            borderBottom: activeTab === 'supabase' ? '2px solid hsl(var(--foreground))' : 'none',
-            fontWeight: activeTab === 'supabase' ? 600 : 400,
-          }}
-          onClick={() => setActiveTab('supabase')}
-        >
-          03 / Supabase Setup & SQL
         </button>
         <button
           className={`mono ${activeTab === 'reviews' ? 'accent' : 'muted'}`}
@@ -2823,54 +3166,147 @@ function Admin() {
             padding: '12px 4px',
             borderBottom: activeTab === 'reviews' ? '2px solid hsl(var(--foreground))' : 'none',
             fontWeight: activeTab === 'reviews' ? 600 : 400,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
           onClick={() => setActiveTab('reviews')}
         >
-          04 / Reviews & Reflections ({reviews.length})
+          03 / Client Reflections ({reviews.length})
         </button>
       </div>
 
       {/* TAB 1: INVENTORY & STORAGE */}
       {activeTab === 'inventory' && (
         <section>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 20,
+              flexWrap: 'wrap',
+              gap: 16,
+            }}
+          >
             <div>
-              <div className="eyebrow accent">Live collection</div>
-              <h2 className="display" style={{ fontSize: 40, margin: '4px 0' }}>
-                THE STUDIO FLOOR
+              <div className="eyebrow accent">Collection Management</div>
+              <h2 className="display" style={{ fontSize: 36, margin: '4px 0' }}>
+                CATALOG ARCHIVE
               </h2>
             </div>
-            <button className="primary-btn" onClick={() => setShowAddModal(true)} data-testid="button-add-product">
-              <Plus size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Add New Piece
+            <button
+              className="primary-btn"
+              onClick={() => setShowAddModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <Plus size={16} /> Add New Piece
             </button>
+          </div>
+
+          {/* Search & Category Filter Controls */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              padding: '14px 16px',
+              background: 'hsl(0 0% 96%)',
+              border: '1px solid hsl(var(--border))',
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+              <Search size={15} className="muted" />
+              <input
+                placeholder="Search pieces by name, category, or ID..."
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  background: 'hsl(var(--background))',
+                  border: '1px solid hsl(var(--border))',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="mono muted" style={{ fontSize: 11 }}>Category:</span>
+                <select
+                  value={inventoryCategory}
+                  onChange={(e) => setInventoryCategory(e.target.value)}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    background: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                  }}
+                >
+                  <option value="All">All Categories</option>
+                  <option value="Outerwear">Outerwear</option>
+                  <option value="Tailoring">Tailoring</option>
+                  <option value="Tops">Tops</option>
+                  <option value="Bottoms">Bottoms</option>
+                  <option value="Knitwear">Knitwear</option>
+                  <option value="Accessories">Accessories</option>
+                  <option value="Denim">Denim</option>
+                </select>
+              </div>
+
+              {(inventorySearch || inventoryCategory !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInventorySearch('');
+                    setInventoryCategory('All');
+                  }}
+                  className="mono muted"
+                  style={{ background: 'none', border: 0, fontSize: 11, textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  Reset filters
+                </button>
+              )}
+
+              <span className="mono muted" style={{ fontSize: 11, marginLeft: 6 }}>
+                Showing {filteredProducts.length} of {products.length}
+              </span>
+            </div>
           </div>
 
           {/* Add Piece Modal */}
           {showAddModal && (
             <div
               style={{
-                background: 'hsl(0 0% 96%)',
+                background: 'hsl(0 0% 97%)',
                 border: '1px solid hsl(var(--border))',
-                padding: 30,
-                marginBottom: 36,
+                padding: 24,
+                marginBottom: 28,
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 className="display" style={{ fontSize: 26, margin: 0 }}>
-                  NEW PIECE / SUPABASE INGESTION
-                </h3>
-                <button className="icon-btn" onClick={() => setShowAddModal(false)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <div className="eyebrow accent">Catalog Archive</div>
+                  <h3 className="display" style={{ fontSize: 24, margin: '4px 0 0' }}>
+                    ADD NEW SILHOUETTE
+                  </h3>
+                </div>
+                <button className="icon-btn" onClick={() => setShowAddModal(false)} aria-label="Close modal">
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleAddPiece} style={{ marginTop: 20, display: 'grid', gap: 18 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 20 }}>
+              <form onSubmit={handleAddPiece} style={{ display: 'grid', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
                   <div className="field">
-                    <label>Piece name</label>
+                    <label>Piece Title</label>
                     <input
                       required
-                      placeholder="e.g. Minimalist Cashmere Cardigan"
+                      placeholder="e.g. Wool Peacoat"
                       value={newPiece.name}
                       onChange={(e) => setNewPiece({ ...newPiece, name: e.target.value })}
                     />
@@ -2880,6 +3316,12 @@ function Admin() {
                     <select
                       value={newPiece.category}
                       onChange={(e) => setNewPiece({ ...newPiece, category: e.target.value })}
+                      style={{
+                        padding: '10px 14px',
+                        background: 'transparent',
+                        border: '1px solid hsl(var(--border))',
+                        font: 'inherit',
+                      }}
                     >
                       <option value="Outerwear">Outerwear</option>
                       <option value="Tailoring">Tailoring</option>
@@ -2891,7 +3333,7 @@ function Admin() {
                     </select>
                   </div>
                   <div className="field">
-                    <label>Price in Naira (₦)</label>
+                    <label>Price in NGN (₦)</label>
                     <input
                       type="number"
                       required
@@ -2900,83 +3342,250 @@ function Admin() {
                       onChange={(e) => setNewPiece({ ...newPiece, price: Number(e.target.value) })}
                     />
                   </div>
-                </div>
-
-                <div className="field">
-                  <label>Description</label>
-                  <textarea
-                    required
-                    placeholder="Describe cut, proportion, cloth provenance..."
-                    value={newPiece.description}
-                    onChange={(e) => setNewPiece({ ...newPiece, description: e.target.value })}
-                    style={{ minHeight: 70 }}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                   <div className="field">
                     <label>Available Sizes (comma separated)</label>
                     <input
+                      placeholder="S, M, L, XL"
                       value={newPiece.sizes}
                       onChange={(e) => setNewPiece({ ...newPiece, sizes: e.target.value })}
-                      placeholder="XS, S, M, L, XL"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                  <div className="field">
+                    <label>Badge / Label (Optional)</label>
+                    <input
+                      placeholder="e.g. New Arrival, Limited Run"
+                      value={newPiece.badge}
+                      onChange={(e) => setNewPiece({ ...newPiece, badge: e.target.value })}
                     />
                   </div>
                   <div className="field">
-                    <label>Badge (optional)</label>
-                    <input
-                      value={newPiece.badge}
-                      onChange={(e) => setNewPiece({ ...newPiece, badge: e.target.value })}
-                      placeholder="New Arrival / Limited"
-                    />
-                  </div>
-                </div>
-
-                {/* Supabase Storage Uploader */}
-                <div
-                  style={{
-                    border: '1px dashed hsl(var(--border))',
-                    padding: 20,
-                    background: 'hsl(var(--background))',
-                  }}
-                >
-                  <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Upload size={14} /> Supabase Storage / Piece Imagery
-                  </div>
-                  <p className="muted" style={{ fontSize: 12, margin: '6px 0 14px' }}>
-                    Upload photo directly to Supabase Storage bucket <code>products</code>, or paste an external image URL.
-                  </p>
-                  <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-                    <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isUploading} />
-                    {newPiece.image && (
-                      <img
-                        src={newPiece.image}
-                        alt="Preview"
-                        style={{ width: 48, height: 48, objectFit: 'cover', border: '1px solid hsl(var(--border))' }}
+                    <label>Upload Image or provide URL</label>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <label
+                        className="secondary-btn"
+                        style={{
+                          cursor: isUploading ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12,
+                          padding: '10px 14px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <Upload size={14} />
+                        {isUploading ? 'Uploading...' : 'Choose File'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileUpload}
+                          disabled={isUploading}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                      <input
+                        placeholder="https://..."
+                        value={newPiece.image}
+                        onChange={(e) => setNewPiece({ ...newPiece, image: e.target.value })}
+                        style={{ flex: 1 }}
                       />
+                    </div>
+                    {uploadFeedback && (
+                      <span className="mono muted" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                        {uploadFeedback}
+                      </span>
                     )}
                   </div>
-                  {uploadFeedback && (
-                    <div className="mono" style={{ fontSize: 11, marginTop: 8, color: 'hsl(var(--muted-foreground))' }}>
-                      {uploadFeedback}
-                    </div>
-                  )}
-                  <div className="field" style={{ marginTop: 12 }}>
-                    <label>Or direct Image URL</label>
+                </div>
+
+                <div className="field">
+                  <label>Provenance & Description</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Describe tailoring, wool weight, cut, silhouette notes..."
+                    value={newPiece.description}
+                    onChange={(e) => setNewPiece({ ...newPiece, description: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      background: 'transparent',
+                      border: '1px solid hsl(var(--border))',
+                      font: 'inherit',
+                      lineHeight: 1.6,
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
+                  <button type="button" className="secondary-btn" onClick={() => setShowAddModal(false)} disabled={isAddingPiece}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary-btn" disabled={isAddingPiece || isUploading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {isAddingPiece ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Saving Piece...
+                      </>
+                    ) : (
+                      'Save Piece to Catalog'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Edit Piece Modal */}
+          {editingPiece && (
+            <div
+              style={{
+                background: 'hsl(0 0% 97%)',
+                border: '1px solid hsl(var(--border))',
+                padding: 24,
+                marginBottom: 28,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <div className="eyebrow accent">Edit Catalog Piece</div>
+                  <h3 className="display" style={{ fontSize: 24, margin: '4px 0 0' }}>
+                    MODIFYING: {editingPiece.name}
+                  </h3>
+                </div>
+                <button className="icon-btn" onClick={() => setEditingPiece(null)} aria-label="Close edit modal">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdatePiece} style={{ display: 'grid', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                  <div className="field">
+                    <label>Piece Title</label>
                     <input
-                      value={newPiece.image}
-                      onChange={(e) => setNewPiece({ ...newPiece, image: e.target.value })}
-                      placeholder="https://images.unsplash.com/..."
+                      required
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Category</label>
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                      style={{
+                        padding: '10px 14px',
+                        background: 'transparent',
+                        border: '1px solid hsl(var(--border))',
+                        font: 'inherit',
+                      }}
+                    >
+                      <option value="Outerwear">Outerwear</option>
+                      <option value="Tailoring">Tailoring</option>
+                      <option value="Tops">Tops</option>
+                      <option value="Bottoms">Bottoms</option>
+                      <option value="Knitwear">Knitwear</option>
+                      <option value="Accessories">Accessories</option>
+                      <option value="Denim">Denim</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Price in NGN (₦)</label>
+                    <input
+                      type="number"
+                      required
+                      value={editForm.price}
+                      onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Available Sizes</label>
+                    <input
+                      value={editForm.sizes}
+                      onChange={(e) => setEditForm({ ...editForm, sizes: e.target.value })}
                     />
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 10 }}>
-                  <button type="button" className="secondary-btn" onClick={() => setShowAddModal(false)}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                  <div className="field">
+                    <label>Badge / Label</label>
+                    <input
+                      placeholder="e.g. Archival, Limited"
+                      value={editForm.badge}
+                      onChange={(e) => setEditForm({ ...editForm, badge: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Imagery URL or Upload New</label>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <label
+                        className="secondary-btn"
+                        style={{
+                          cursor: isEditUploading ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12,
+                          padding: '10px 14px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <Upload size={14} />
+                        {isEditUploading ? 'Uploading...' : 'Replace File'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleEditFileUpload}
+                          disabled={isEditUploading}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                      <input
+                        required
+                        value={editForm.image}
+                        onChange={(e) => setEditForm({ ...editForm, image: e.target.value })}
+                        style={{ flex: 1 }}
+                      />
+                    </div>
+                    {editUploadFeedback && (
+                      <span className="mono muted" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                        {editUploadFeedback}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>Provenance & Description</label>
+                  <textarea
+                    rows={3}
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      background: 'transparent',
+                      border: '1px solid hsl(var(--border))',
+                      font: 'inherit',
+                      lineHeight: 1.6,
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
+                  <button type="button" className="secondary-btn" onClick={() => setEditingPiece(null)} disabled={isUpdatingPiece}>
                     Cancel
                   </button>
-                  <button type="submit" className="primary-btn">
-                    Save Piece to Supabase
+                  <button type="submit" className="primary-btn" disabled={isUpdatingPiece || isEditUploading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {isUpdatingPiece ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Saving Changes...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
                   </button>
                 </div>
               </form>
@@ -2997,40 +3606,68 @@ function Admin() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((p) => (
-                  <tr key={p.id}>
-                    <td style={{ width: 60 }}>
-                      <img
-                        src={p.image}
-                        alt={p.name}
-                        style={{ width: 44, height: 52, objectFit: 'cover', filter: 'saturate(.7)' }}
-                      />
-                    </td>
-                    <td>
-                      <strong>{p.name}</strong>
-                      <div className="muted" style={{ fontSize: 11 }}>
-                        {p.category} {p.badge ? `· ${p.badge}` : ''}
-                      </div>
-                    </td>
-                    <td className="mono">{money(p.price)}</td>
-                    <td className="mono" style={{ fontSize: 11 }}>
-                      {Array.isArray(p.sizes) ? p.sizes.join(', ') : 'S, M, L'}
-                    </td>
-                    <td className="mono muted" style={{ fontSize: 10 }}>
-                      {p.id}
-                    </td>
-                    <td>
-                      <button
-                        className="icon-btn"
-                        onClick={() => handleDelete(p.id)}
-                        aria-label="Delete product"
-                        title="Delete from Supabase"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 40 }} className="muted">
+                      No pieces matched your search criteria.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredProducts.map((p) => (
+                    <tr key={p.id}>
+                      <td style={{ width: 60 }}>
+                        <img
+                          src={p.image}
+                          alt={p.name}
+                          style={{ width: 44, height: 52, objectFit: 'cover', filter: 'saturate(.7)' }}
+                        />
+                      </td>
+                      <td>
+                        <strong>{p.name}</strong>
+                        <div className="muted" style={{ fontSize: 11 }}>
+                          {p.category} {p.badge ? `· ${p.badge}` : ''}
+                        </div>
+                      </td>
+                      <td className="mono">{money(p.price)}</td>
+                      <td className="mono" style={{ fontSize: 11 }}>
+                        {Array.isArray(p.sizes) ? p.sizes.join(', ') : 'S, M, L'}
+                      </td>
+                      <td className="mono muted" style={{ fontSize: 10 }}>
+                        {p.id}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Link
+                            href={`/product/${p.id}`}
+                            className="icon-btn"
+                            title="View piece in storefront"
+                            aria-label={`View ${p.name}`}
+                          >
+                            <Eye size={15} />
+                          </Link>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            onClick={() => handleStartEdit(p)}
+                            title="Edit piece specifications"
+                            aria-label={`Edit ${p.name}`}
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            onClick={() => setDeleteConfirm({ type: 'piece', id: p.id, name: p.name })}
+                            aria-label={`Delete ${p.name}`}
+                            title="Delete piece"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -3040,12 +3677,354 @@ function Admin() {
       {/* TAB 2: CLIENT ORDERS */}
       {activeTab === 'orders' && (
         <section>
-          <div style={{ marginBottom: 24 }}>
-            <div className="eyebrow accent">Supabase Orders</div>
-            <h2 className="display" style={{ fontSize: 40, margin: '4px 0' }}>
-              DISPATCHES & CLIENTS
-            </h2>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 20,
+              flexWrap: 'wrap',
+              gap: 16,
+            }}
+          >
+            <div>
+              <div className="eyebrow accent">Client Dispatches</div>
+              <h2 className="display" style={{ fontSize: 36, margin: '4px 0' }}>
+                DISPATCHES & CLIENTS
+              </h2>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={exportOrdersCSV}
+                disabled={isExportingOrders}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                title="Download CSV report of dispatches"
+              >
+                {isExportingOrders ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" /> Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download size={14} /> Export CSV
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={handleRefreshOrdersWithFeedback}
+                disabled={refreshingOrders}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                title="Refresh latest orders"
+              >
+                <RefreshCw size={14} className={refreshingOrders ? 'animate-spin' : ''} />{' '}
+                {refreshingOrders ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
           </div>
+
+          {/* Search & Status Filter Controls */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              padding: '14px 16px',
+              background: 'hsl(0 0% 96%)',
+              border: '1px solid hsl(var(--border))',
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+              <Search size={15} className="muted" />
+              <input
+                placeholder="Search orders by reference ID, client name, email, or city..."
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  background: 'hsl(var(--background))',
+                  border: '1px solid hsl(var(--border))',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="mono muted" style={{ fontSize: 11 }}>Status:</span>
+                <select
+                  value={orderStatusFilter}
+                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    background: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                  }}
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Processing">Processing</option>
+                  <option value="Shipped">Shipped</option>
+                  <option value="Delivered">Delivered</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              {(orderSearch || orderStatusFilter !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderSearch('');
+                    setOrderStatusFilter('All');
+                  }}
+                  className="mono muted"
+                  style={{ background: 'none', border: 0, fontSize: 11, textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  Reset filters
+                </button>
+              )}
+
+              <span className="mono muted" style={{ fontSize: 11, marginLeft: 6 }}>
+                Showing {filteredOrders.length} of {orders.length}
+              </span>
+            </div>
+          </div>
+
+          {/* Inspect Order Details Modal */}
+          {inspectedOrder && (
+            <div
+              style={{
+                background: 'hsl(0 0% 97%)',
+                border: '1px solid hsl(var(--border))',
+                padding: 24,
+                marginBottom: 28,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                <div>
+                  <div className="eyebrow accent">Dispatch Details</div>
+                  <h3 className="display" style={{ fontSize: 28, margin: '4px 0' }}>
+                    ORDER {inspectedOrder.id}
+                  </h3>
+                  <div className="mono muted" style={{ fontSize: 11 }}>
+                    Recorded on {new Date(inspectedOrder.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => window.print()}
+                    style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                  >
+                    <Printer size={13} /> Print Slip
+                  </button>
+                  <button className="icon-btn" onClick={() => setInspectedOrder(null)} aria-label="Close details">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, marginBottom: 24 }}>
+                <div style={{ border: '1px solid hsl(var(--border))', padding: 18, background: 'hsl(var(--background))' }}>
+                  <div className="eyebrow accent" style={{ marginBottom: 8 }}>Client Information</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{inspectedOrder.customer_name}</div>
+                  <div className="mono muted" style={{ fontSize: 12, marginTop: 4 }}>{inspectedOrder.customer_email}</div>
+                  {inspectedOrder.phone && (
+                    <div className="mono muted" style={{ fontSize: 12, marginTop: 2 }}>Phone: {inspectedOrder.phone}</div>
+                  )}
+
+                  <div className="eyebrow accent" style={{ marginTop: 16, marginBottom: 6 }}>Shipping Destination</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+                    {inspectedOrder.shipping_address}<br />
+                    {inspectedOrder.city}, {inspectedOrder.postcode}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyAddress(
+                        `${inspectedOrder.customer_name}\n${inspectedOrder.shipping_address}\n${inspectedOrder.city} ${inspectedOrder.postcode}`
+                      )
+                    }
+                    className="mono"
+                    style={{
+                      marginTop: 10,
+                      background: 'none',
+                      border: '1px solid hsl(var(--border))',
+                      padding: '4px 8px',
+                      fontSize: 10,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Copy size={11} />
+                    {copiedAddress ? 'Address Copied!' : 'Copy Shipping Address'}
+                  </button>
+                </div>
+
+                <div style={{ border: '1px solid hsl(var(--border))', padding: 18, background: 'hsl(var(--background))' }}>
+                  <div className="eyebrow accent" style={{ marginBottom: 8 }}>Dispatch Status & Actions</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <span className="mono" style={{ fontSize: 12 }}>Current:</span>
+                    <span
+                      className="mono"
+                      style={{
+                        padding: '4px 10px',
+                        background: 'hsl(var(--foreground))',
+                        color: 'hsl(var(--background))',
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {inspectedOrder.status}
+                    </span>
+                  </div>
+
+                  <div className="mono muted" style={{ fontSize: 11, marginBottom: 8 }}>Quick Status Update:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: 10, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      disabled={updatingStatusId !== null}
+                      onClick={() => handleStatusChange(inspectedOrder.id, 'Processing')}
+                    >
+                      {updatingStatusId === `${inspectedOrder.id}-Processing` ? (
+                        <>
+                          <Loader2 size={11} className="animate-spin" /> Updating...
+                        </>
+                      ) : (
+                        'Set Processing'
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: 10, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      disabled={updatingStatusId !== null}
+                      onClick={() => handleStatusChange(inspectedOrder.id, 'Shipped')}
+                    >
+                      {updatingStatusId === `${inspectedOrder.id}-Shipped` ? (
+                        <>
+                          <Loader2 size={11} className="animate-spin" /> Updating...
+                        </>
+                      ) : (
+                        'Set Shipped'
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: 10, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      disabled={updatingStatusId !== null}
+                      onClick={() => handleStatusChange(inspectedOrder.id, 'Delivered')}
+                    >
+                      {updatingStatusId === `${inspectedOrder.id}-Delivered` ? (
+                        <>
+                          <Loader2 size={11} className="animate-spin" /> Updating...
+                        </>
+                      ) : (
+                        'Set Delivered'
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ fontSize: 10, padding: '4px 8px', color: 'hsl(0 70% 40%)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      disabled={updatingStatusId !== null}
+                      onClick={() => handleStatusChange(inspectedOrder.id, 'Cancelled')}
+                    >
+                      {updatingStatusId === `${inspectedOrder.id}-Cancelled` ? (
+                        <>
+                          <Loader2 size={11} className="animate-spin" /> Updating...
+                        </>
+                      ) : (
+                        'Set Cancelled'
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="rule" style={{ margin: '16px 0' }} />
+
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm({ type: 'order', id: inspectedOrder.id, name: `Order ${inspectedOrder.id}` })}
+                    style={{
+                      background: 'none',
+                      border: 0,
+                      color: 'hsl(0 70% 40%)',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Trash2 size={13} /> Delete Order Record
+                  </button>
+                </div>
+              </div>
+
+              {/* Items Breakdown */}
+              <div className="eyebrow accent" style={{ marginBottom: 10 }}>Dispatched Items</div>
+              <div style={{ border: '1px solid hsl(var(--border))', background: 'hsl(var(--background))' }}>
+                {inspectedOrder.items && inspectedOrder.items.length > 0 ? (
+                  inspectedOrder.items.map((it, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px 16px',
+                        borderBottom: idx === inspectedOrder.items.length - 1 ? 'none' : '1px solid hsl(var(--border))',
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: 13 }}>{it.name}</strong>
+                        <div className="mono muted" style={{ fontSize: 11 }}>
+                          Size: {it.size} · Quantity: {it.quantity}
+                        </div>
+                      </div>
+                      <div className="mono" style={{ fontWeight: 600 }}>
+                        {money(it.price * it.quantity)}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ padding: 16 }} className="muted mono">
+                    Standard catalog items
+                  </div>
+                )}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    background: 'hsl(0 0% 95%)',
+                    borderTop: '1px solid hsl(var(--border))',
+                  }}
+                >
+                  <span className="mono" style={{ fontWeight: 600 }}>Total Recorded</span>
+                  <span className="mono" style={{ fontWeight: 700, fontSize: 15 }}>
+                    {money(inspectedOrder.total_amount)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {orders.length === 0 ? (
             <div className="empty-state">
@@ -3053,7 +4032,7 @@ function Admin() {
               <h2 className="display" style={{ fontSize: 32 }}>
                 NO ORDERS RECORDED.
               </h2>
-              <p>When clients complete checkout, their order is captured into Supabase and listed here.</p>
+              <p>When clients complete checkout, their order is captured and listed here.</p>
             </div>
           ) : (
             <div className="table-overflow">
@@ -3066,63 +4045,95 @@ function Admin() {
                     <th>Items</th>
                     <th>Total (NGN)</th>
                     <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((o) => (
-                    <tr key={o.id}>
-                      <td className="mono">
-                        <strong>{o.id}</strong>
-                        <div className="muted" style={{ fontSize: 10 }}>
-                          {new Date(o.created_at).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td>
-                        <div>{o.customer_name}</div>
-                        <div className="mono muted" style={{ fontSize: 11 }}>
-                          {o.customer_email}
-                        </div>
-                      </td>
-                      <td style={{ fontSize: 11 }}>
-                        {o.shipping_address}, {o.city} {o.postcode}
-                      </td>
-                      <td>
-                        {o.items && o.items.length > 0 ? (
-                          <div style={{ fontSize: 11 }}>
-                            {o.items.map((it, idx) => (
-                              <div key={idx}>
-                                {it.name} ({it.size}) × {it.quantity}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="muted">Standard items</span>
-                        )}
-                      </td>
-                      <td className="mono" style={{ fontWeight: 700 }}>
-                        {money(o.total_amount)}
-                      </td>
-                      <td>
-                        <select
-                          value={o.status}
-                          onChange={(e) => handleStatusChange(o.id, e.target.value as Order['status'])}
-                          style={{
-                            padding: '4px 8px',
-                            background: 'transparent',
-                            border: '1px solid hsl(var(--border))',
-                            font: '10px var(--app-font-mono)',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="Processing">Processing</option>
-                          <option value="Shipped">Shipped</option>
-                          <option value="Delivered">Delivered</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: 40 }} className="muted">
+                        No orders matched your search criteria.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredOrders.map((o) => (
+                      <tr key={o.id}>
+                        <td className="mono">
+                          <strong>{o.id}</strong>
+                          <div className="muted" style={{ fontSize: 10 }}>
+                            {new Date(o.created_at).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td>
+                          <div>{o.customer_name}</div>
+                          <div className="mono muted" style={{ fontSize: 11 }}>
+                            {o.customer_email}
+                          </div>
+                        </td>
+                        <td style={{ fontSize: 11 }}>
+                          {o.shipping_address}, {o.city} {o.postcode}
+                        </td>
+                        <td>
+                          {o.items && o.items.length > 0 ? (
+                            <div style={{ fontSize: 11 }}>
+                              {o.items.map((it, idx) => (
+                                <div key={idx}>
+                                  {it.name} ({it.size}) × {it.quantity}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="muted">Standard items</span>
+                          )}
+                        </td>
+                        <td className="mono" style={{ fontWeight: 700 }}>
+                          {money(o.total_amount)}
+                        </td>
+                        <td>
+                          <select
+                            value={o.status}
+                            onChange={(e) => handleStatusChange(o.id, e.target.value as Order['status'])}
+                            style={{
+                              padding: '4px 8px',
+                              background: 'transparent',
+                              border: '1px solid hsl(var(--border))',
+                              font: '10px var(--app-font-mono)',
+                              textTransform: 'uppercase',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="Processing">Processing</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              onClick={() => setInspectedOrder(o)}
+                              title="Inspect order details"
+                              aria-label={`Inspect ${o.id}`}
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              onClick={() => setDeleteConfirm({ type: 'order', id: o.id, name: `Order ${o.id}` })}
+                              title="Delete order record"
+                              aria-label={`Delete ${o.id}`}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -3130,157 +4141,57 @@ function Admin() {
         </section>
       )}
 
-      {/* TAB 3: SUPABASE SETUP & SQL */}
-      {activeTab === 'supabase' && (
-        <section>
-          <div style={{ marginBottom: 24 }}>
-            <div className="eyebrow accent">Configuration & Database Migration</div>
-            <h2 className="display" style={{ fontSize: 40, margin: '4px 0' }}>
-              SUPABASE INTEGRATION
-            </h2>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
-            <div style={{ background: 'hsl(0 0% 95%)', padding: 24, border: '1px solid hsl(var(--border))' }}>
-              <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <ShieldCheck size={14} /> Service Status
-              </div>
-              <h3 className="display" style={{ fontSize: 24, margin: '10px 0' }}>
-                ALL SERVICES WIRED TO SUPABASE
-              </h3>
-              <ul style={{ paddingLeft: 18, margin: '14px 0', fontSize: 13, lineHeight: 1.8 }}>
-                <li>
-                  <strong>Authentication:</strong> Supabase Auth (Email, Password, Google OAuth)
-                </li>
-                <li>
-                  <strong>Database:</strong> PostgreSQL tables for <code>products</code> and <code>orders</code>
-                </li>
-                <li>
-                  <strong>Storage:</strong> Supabase Storage bucket <code>products</code> for asset uploads
-                </li>
-                <li>
-                  <strong>Admin Controls:</strong> Real-time CRUD & dispatch state management
-                </li>
-                <li>
-                  <strong>Currency:</strong> Nigerian Naira (NGN / ₦) across all flows
-                </li>
-              </ul>
-            </div>
-
-            <div style={{ background: 'hsl(0 0% 95%)', padding: 24, border: '1px solid hsl(var(--border))' }}>
-              <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <RefreshCw size={14} /> 1-Click Catalog Seeder
-              </div>
-              <h3 className="display" style={{ fontSize: 24, margin: '10px 0' }}>
-                POPULATE SUPABASE CATALOG
-              </h3>
-              <p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>
-                Push the curated luxury DIRACE collection (with prices in Naira) straight into your connected Supabase{' '}
-                <code>products</code> table with one click.
-              </p>
-              <button
-                className="primary-btn"
-                onClick={handleSeedCatalog}
-                style={{ marginTop: 16 }}
-                data-testid="button-seed-supabase"
-              >
-                Seed DIRACE Collection to Supabase
-              </button>
-              {seedingStatus && (
-                <div className="mono" style={{ fontSize: 11, marginTop: 10, color: 'hsl(var(--foreground))' }}>
-                  {seedingStatus}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ background: 'hsl(0 0% 96%)', padding: 26, border: '1px solid hsl(var(--border))' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div>
-                <div className="eyebrow accent">SQL Migration Script</div>
-                <h3 className="display" style={{ fontSize: 22, margin: '4px 0' }}>
-                  SUPABASE SQL SETUP
-                </h3>
-              </div>
-              <button className="secondary-btn" onClick={copySql}>
-                {copiedSql ? (
-                  <>
-                    <Check size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Copied to Clipboard
-                  </>
-                ) : (
-                  <>
-                    <Copy size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Copy SQL Schema
-                  </>
-                )}
-              </button>
-            </div>
-            <p className="muted" style={{ fontSize: 12, marginBottom: 14 }}>
-              Paste this in your <strong>Supabase Dashboard &gt; SQL Editor</strong> to create the <code>products</code>,{' '}
-              <code>orders</code>, and <code>products</code> storage bucket with public policies in one command.
-            </p>
-            <pre
-              className="mono"
-              style={{
-                background: 'hsl(0 0% 12%)',
-                color: 'hsl(0 0% 90%)',
-                padding: 18,
-                fontSize: 11,
-                overflowX: 'auto',
-                maxHeight: 340,
-                lineHeight: 1.6,
-              }}
-            >
-              {SUPABASE_SQL_SCHEMA}
-            </pre>
-          </div>
-        </section>
-      )}
-
-      {/* TAB 4: REVIEWS & MODERATION */}
+      {/* TAB 3: REVIEWS & MODERATION */}
       {activeTab === 'reviews' && (
         <section>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
             <div>
-              <div className="eyebrow accent">Supabase 'reviews' table</div>
+              <div className="eyebrow accent">Client Reflections</div>
               <h2 className="display" style={{ fontSize: 36, margin: '4px 0' }}>
                 CLIENT REFLECTIONS & REVIEWS
               </h2>
               <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
-                Manage authentic client ratings and reflections stored directly in the Supabase <code>public.reviews</code> table.
+                Manage authentic client ratings and reflections across the catalog.
               </p>
             </div>
-            <button
-              className="secondary-btn"
-              onClick={handlePurgeDummyReviews}
-              disabled={seedingReviews}
-              style={{ fontSize: 12 }}
-            >
-              <RefreshCw size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-              {seedingReviews ? 'Purging Dummy Data...' : 'Purge Dummy Data & Sync'}
-            </button>
-          </div>
-
-          {reviewsStatusMessage && (
-            <div
-              className="mono"
-              style={{
-                fontSize: 11,
-                padding: '10px 14px',
-                background: 'hsl(0 0% 96%)',
-                border: '1px solid hsl(var(--border))',
-                marginBottom: 20,
-              }}
-            >
-              {reviewsStatusMessage}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={exportReviewsCSV}
+                disabled={isExportingReviews}
+                style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                title="Export all client reflections to CSV"
+              >
+                {isExportingReviews ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" /> Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download size={13} /> Export CSV
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={handleRefreshReviewsWithFeedback}
+                style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                disabled={refreshingReviews}
+              >
+                <RefreshCw size={13} className={refreshingReviews ? 'animate-spin' : ''} />
+                {refreshingReviews ? 'Refreshing...' : 'Refresh Reflections'}
+              </button>
             </div>
-          )}
+          </div>
 
           {/* Review metrics */}
           <div className="admin-grid" style={{ marginBottom: 28 }}>
             <div className="stat-card">
               <div className="eyebrow accent">Total Reviews</div>
               <strong>{reviews.length}</strong>
-              <span className="mono muted">In Supabase table</span>
+              <span className="mono muted">Recorded reflections</span>
             </div>
             <div className="stat-card">
               <div className="eyebrow accent">Average Rating</div>
@@ -3303,6 +4214,79 @@ function Admin() {
             </div>
           </div>
 
+          {/* Search & Rating Filter Bar */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              padding: '14px 16px',
+              background: 'hsl(0 0% 96%)',
+              border: '1px solid hsl(var(--border))',
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+              <Search size={15} className="muted" />
+              <input
+                placeholder="Search reflections by client, piece, or commentary..."
+                value={reviewSearch}
+                onChange={(e) => setReviewSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  background: 'hsl(var(--background))',
+                  border: '1px solid hsl(var(--border))',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="mono muted" style={{ fontSize: 11 }}>Rating:</span>
+                <select
+                  value={reviewRatingFilter}
+                  onChange={(e) => setReviewRatingFilter(e.target.value)}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    background: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                  }}
+                >
+                  <option value="All">All Ratings</option>
+                  <option value="5">5 Stars</option>
+                  <option value="4">4 Stars</option>
+                  <option value="3">3 Stars</option>
+                  <option value="2">2 Stars</option>
+                  <option value="1">1 Star</option>
+                </select>
+              </div>
+
+              {(reviewSearch || reviewRatingFilter !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewSearch('');
+                    setReviewRatingFilter('All');
+                  }}
+                  className="mono muted"
+                  style={{ background: 'none', border: 0, fontSize: 11, textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  Reset filters
+                </button>
+              )}
+
+              <span className="mono muted" style={{ fontSize: 11, marginLeft: 6 }}>
+                Showing {filteredReviews.length} of {reviews.length}
+              </span>
+            </div>
+          </div>
+
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
@@ -3312,18 +4296,18 @@ function Admin() {
                   <th>Client</th>
                   <th>Reflection & Notes</th>
                   <th>Date</th>
-                  <th>Action</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {reviews.length === 0 ? (
+                {filteredReviews.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: 40 }} className="muted">
-                      No client reviews recorded in Supabase yet. Authentic reflections submitted by authenticated users on product detail pages will appear here.
+                      No client reviews matched your filter criteria.
                     </td>
                   </tr>
                 ) : (
-                  reviews.map((r) => {
+                  filteredReviews.map((r) => {
                     const prod = products.find((p) => p.id === r.product_id);
                     return (
                       <tr key={r.id}>
@@ -3355,7 +4339,7 @@ function Admin() {
                             {r.user_name}
                           </div>
                           <div className="muted mono" style={{ fontSize: 10 }}>
-                            {r.user_email || 'Authenticated User'}
+                            {r.user_email || 'Verified Client'}
                           </div>
                         </td>
                         <td style={{ maxWidth: 340 }}>
@@ -3369,17 +4353,27 @@ function Admin() {
                           })}
                         </td>
                         <td>
-                          <button
-                            className="icon-btn"
-                            title="Delete review from Supabase"
-                            onClick={async () => {
-                              if (window.confirm('Delete this review from Supabase?')) {
-                                await deleteReview(r.id);
-                              }
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {prod && (
+                              <Link
+                                href={`/product/${prod.id}`}
+                                className="icon-btn"
+                                title="View piece in store"
+                                aria-label={`View ${prod.name}`}
+                              >
+                                <ExternalLink size={13} />
+                              </Link>
+                            )}
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Delete reflection"
+                              aria-label="Delete reflection"
+                              onClick={() => setDeleteConfirm({ type: 'review', id: r.id, name: `Reflection by ${r.user_name || 'Anonymous'}` })}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -3389,6 +4383,83 @@ function Admin() {
             </table>
           </div>
         </section>
+      )}
+
+      {/* IN-APP DELETION CONFIRMATION DIALOG (IFRAME-SAFE) */}
+      {deleteConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 24,
+          }}
+          onClick={() => setDeleteConfirm(null)}
+        >
+          <div
+            style={{
+              background: 'hsl(var(--background))',
+              border: '1px solid hsl(var(--border))',
+              padding: 32,
+              maxWidth: 460,
+              width: '100%',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.28)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="eyebrow" style={{ color: 'hsl(0 75% 45%)' }}>
+              Confirm Action
+            </div>
+            <h3 className="display" style={{ fontSize: 24, margin: '8px 0 14px' }}>
+              DELETE PERMANENTLY?
+            </h3>
+            <p style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 24px', color: 'hsl(var(--foreground))' }}>
+              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove this {deleteConfirm.type === 'piece' ? 'catalog piece' : deleteConfirm.type === 'order' ? 'order record' : 'client reflection'}.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setDeleteConfirm(null)}
+                style={{ fontSize: 12 }}
+                disabled={deletingId !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={handleConfirmDelete}
+                disabled={deletingId !== null}
+                style={{
+                  fontSize: 12,
+                  background: 'hsl(0 75% 45%)',
+                  borderColor: 'hsl(0 75% 45%)',
+                  color: '#fff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {deletingId ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" /> Deleting...
+                  </>
+                ) : (
+                  'Delete Record'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
@@ -3458,12 +4529,22 @@ function App() {
   const refreshProducts = async () => {
     try {
       const data = await fetchProductsFromSupabase();
-      if (data && data.length > 0) {
-        setProducts(data);
-      }
+      setProducts(data || []);
     } catch (e) {
       console.warn('Could not refresh products from Supabase:', e);
     }
+  };
+
+  const deleteProduct = async (productId: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    await deleteProductFromSupabase(productId);
+    await refreshProducts();
+  };
+
+  const deleteOrder = async (orderId: string) => {
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    await deleteOrderFromSupabase(orderId);
+    await refreshOrders();
   };
 
   const refreshOrders = async () => {
@@ -3501,6 +4582,7 @@ function App() {
   };
 
   const deleteReview = async (reviewId: string) => {
+    setReviews((prev) => prev.filter((r) => r.id !== reviewId));
     await deleteReviewFromSupabase(reviewId);
     await refreshReviews();
   };
@@ -3549,8 +4631,10 @@ function App() {
         value={{
           products,
           refreshProducts,
+          deleteProduct,
           orders,
           refreshOrders,
+          deleteOrder,
           reviews,
           refreshReviews,
           addReview,

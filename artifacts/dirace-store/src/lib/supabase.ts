@@ -67,6 +67,7 @@ export interface Order {
   user_id?: string | null;
   customer_name: string;
   customer_email: string;
+  phone?: string;
   shipping_address: string;
   city: string;
   postcode: string;
@@ -89,153 +90,8 @@ export interface Review {
 
 export const DEFAULT_REVIEWS: Review[] = [];
 
-// Initial curated collection in Nigerian Naira (NGN)
-export const DEFAULT_PRODUCTS: Product[] = [
-  {
-    id: 'prod_1',
-    name: 'The Oversized Blazer',
-    category: 'Outerwear',
-    price: 350000, // ₦350,000
-    image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80',
-    alt: 'Oversized black tailored blazer',
-    badge: 'New Arrival',
-    description: 'Structured, severe, and meticulously tailored. The Oversized Blazer forms the cornerstone of any modern uniform.',
-    sizes: ['XS', 'S', 'M', 'L'],
-    stock: 14,
-  },
-  {
-    id: 'prod_2',
-    name: 'Pleated Trousers',
-    category: 'Bottoms',
-    price: 220000, // ₦220,000
-    image: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=800&q=80',
-    alt: 'Wide leg pleated charcoal trousers',
-    badge: 'Classic',
-    description: 'Fluid motion captured in fabric. These high-waisted pleated trousers offer unparalleled drape and movement.',
-    sizes: ['28', '30', '32', '34'],
-    stock: 22,
-  },
-  {
-    id: 'prod_3',
-    name: 'Heavyweight Crewneck',
-    category: 'Tops',
-    price: 180000, // ₦180,000
-    image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800&q=80',
-    alt: 'Minimalist grey crewneck sweater',
-    badge: 'Essential',
-    description: 'The Platonic ideal of a sweatshirt. Cut from dense 500gsm cotton terry with a slightly cropped, boxy fit.',
-    sizes: ['S', 'M', 'L', 'XL'],
-    stock: 35,
-  },
-  {
-    id: 'prod_4',
-    name: 'Structured Leather Tote',
-    category: 'Accessories',
-    price: 450000, // ₦450,000
-    image: 'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?w=800&q=80',
-    alt: 'Black leather structural tote bag',
-    badge: 'Limited',
-    description: 'Architectural carry. Crafted from rigid Italian calfskin that develops a profound patina with extended use.',
-    sizes: ['OS'],
-    stock: 8,
-  },
-  {
-    id: 'prod_5',
-    name: 'Raw Denim Jacket',
-    category: 'Outerwear',
-    price: 280000, // ₦280,000
-    image: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&q=80',
-    alt: 'Deep indigo raw denim outerwear jacket',
-    badge: 'Signature',
-    description: 'Unwashed Japanese selvedge denim crafted with brass hardware and reinforced drop shoulders.',
-    sizes: ['S', 'M', 'L', 'XL'],
-    stock: 12,
-  },
-  {
-    id: 'prod_6',
-    name: 'Merino Wool Mock Neck',
-    category: 'Knitwear',
-    price: 210000, // ₦210,000
-    image: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=800&q=80',
-    alt: 'Black fine merino wool mock neck knitwear',
-    badge: 'Restocked',
-    description: 'Ultra-fine 19.5 micron merino wool for second-skin warmth without bulk. Engineered for layering.',
-    sizes: ['XS', 'S', 'M', 'L'],
-    stock: 19,
-  },
-  {
-    id: 'prod_7',
-    name: 'Cocoon Wool Coat',
-    category: 'Outerwear',
-    price: 480000, // ₦480,000
-    image: 'https://images.unsplash.com/photo-1539533018447-63fcce667883?w=800&q=80',
-    alt: 'Minimalist black double-breasted cocoon coat',
-    badge: 'Archive',
-    description: 'Sculptural cocoon silhouette in double-faced Italian virgin wool with hidden horn button closures.',
-    sizes: ['S', 'M', 'L'],
-    stock: 7,
-  },
-  {
-    id: 'prod_8',
-    name: 'Relaxed Wide-Leg Chino',
-    category: 'Bottoms',
-    price: 195000, // ₦195,000
-    image: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&q=80',
-    alt: 'Relaxed wide leg cotton trousers',
-    badge: 'Essential',
-    description: 'Heavyweight brushed cotton twill with deep front pleats and an architectural straight taper.',
-    sizes: ['28', '30', '32', '34'],
-    stock: 18,
-  },
-  {
-    id: 'prod_9',
-    name: 'Boxy Poplin Shirt',
-    category: 'Tops',
-    price: 165000, // ₦165,000
-    image: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&q=80',
-    alt: 'Crisp white poplin button down shirt',
-    badge: 'Core',
-    description: '120-thread count Egyptian cotton poplin with dropped shoulders and a clean squared hem.',
-    sizes: ['S', 'M', 'L', 'XL'],
-    stock: 24,
-  },
-  {
-    id: 'prod_10',
-    name: 'Calfskin Minimalist Belt',
-    category: 'Accessories',
-    price: 110000, // ₦110,000
-    image: 'https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=800&q=80',
-    alt: 'Matte black calfskin leather belt with brushed steel buckle',
-    badge: 'Accessory',
-    description: 'Full-grain vegetable-tanned French calfskin finished with custom brushed stainless steel hardware.',
-    sizes: ['85', '90', '95', '100'],
-    stock: 15,
-  },
-  {
-    id: 'prod_11',
-    name: 'Chunky Ribbed Cardigan',
-    category: 'Knitwear',
-    price: 290000, // ₦290,000
-    image: 'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=800&q=80',
-    alt: 'Oatmeal heavy ribbed knit cardigan',
-    badge: 'Seasonal',
-    description: 'Spun from chunky Scottish lambswool in an exaggerated 3-gauge fisherman rib.',
-    sizes: ['S', 'M', 'L'],
-    stock: 11,
-  },
-  {
-    id: 'prod_12',
-    name: 'Monolithic Leather Cardholder',
-    category: 'Accessories',
-    price: 75000, // ₦75,000
-    image: 'https://images.unsplash.com/photo-1606503829064-28b9d2a23363?w=800&q=80',
-    alt: 'Slim architectural black card case',
-    badge: 'Edition',
-    description: 'Hand-burnished saddle leather case with bevelled edge paint and laser-engraved serial stamping.',
-    sizes: ['OS'],
-    stock: 30,
-  }
-];
+// Empty initial collection - no dummy products
+export const DEFAULT_PRODUCTS: Product[] = [];
 
 // Local fallback store keys
 const LOCAL_PRODUCTS_KEY = 'dirace_local_products';
@@ -245,11 +101,22 @@ const LOCAL_REVIEWS_KEY = 'dirace_local_reviews';
 export const getStoredLocalProducts = (): Product[] => {
   try {
     const raw = localStorage.getItem(LOCAL_PRODUCTS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Strip out only legacy dummy product IDs (prod_1 to prod_12)
+        const dummyIds = new Set(['prod_1', 'prod_2', 'prod_3', 'prod_4', 'prod_5', 'prod_6', 'prod_7', 'prod_8', 'prod_9', 'prod_10', 'prod_11', 'prod_12']);
+        const clean = parsed.filter((p: any) => !dummyIds.has(p?.id));
+        if (clean.length !== parsed.length) {
+          localStorage.setItem(LOCAL_PRODUCTS_KEY, JSON.stringify(clean));
+        }
+        return clean;
+      }
+    }
   } catch (e) {
     console.warn('Could not parse local products', e);
   }
-  return DEFAULT_PRODUCTS;
+  return [];
 };
 
 export const saveStoredLocalProducts = (items: Product[]) => {
@@ -328,12 +195,7 @@ export async function fetchProductsFromSupabase(): Promise<Product[]> {
       return getStoredLocalProducts();
     }
 
-    if (data && data.length > 0) {
-      return data as Product[];
-    } else {
-      // If table is empty, return default products
-      return getStoredLocalProducts();
-    }
+    return (data || []) as Product[];
   } catch (err) {
     console.warn('Error querying Supabase products:', err);
     return getStoredLocalProducts();
@@ -408,10 +270,10 @@ export async function deleteProductFromSupabase(id: string): Promise<boolean> {
     try {
       const { error } = await sb.from('products').delete().eq('id', id);
       if (error) {
-        console.error('Supabase product delete error:', error.message);
+        console.error('Product delete error:', error.message);
       }
     } catch (err) {
-      console.error('Exception deleting product from Supabase:', err);
+      console.error('Exception deleting product:', err);
     }
   }
 
@@ -421,10 +283,39 @@ export async function deleteProductFromSupabase(id: string): Promise<boolean> {
   return true;
 }
 
+export async function updateProductInSupabase(id: string, updates: Partial<Product>): Promise<Product | null> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('products').update(updates).eq('id', id).select().single();
+      if (!error && data) {
+        const local = getStoredLocalProducts();
+        const updated = local.map((p) => (p.id === id ? { ...p, ...(data as Product) } : p));
+        saveStoredLocalProducts(updated);
+        return data as Product;
+      }
+    } catch (err) {
+      console.error('Exception updating product:', err);
+    }
+  }
+
+  const local = getStoredLocalProducts();
+  let updatedProduct: Product | null = null;
+  const updated = local.map((p) => {
+    if (p.id === id) {
+      updatedProduct = { ...p, ...updates };
+      return updatedProduct;
+    }
+    return p;
+  });
+  saveStoredLocalProducts(updated);
+  return updatedProduct;
+}
+
 export async function seedProductsToSupabase(): Promise<{ success: boolean; count: number; error?: string }> {
   const sb = getSupabase();
   if (!sb) {
-    return { success: false, count: 0, error: 'Supabase credentials not configured yet.' };
+    return { success: false, count: 0, error: 'Database credentials not configured yet.' };
   }
 
   try {
@@ -501,7 +392,7 @@ export async function updateOrderStatusInSupabase(orderId: string, status: Order
   if (sb) {
     try {
       const { error } = await sb.from('orders').update({ status }).eq('id', orderId);
-      if (error) console.warn('Supabase update order status error:', error.message);
+      if (error) console.warn('Update order status error:', error.message);
     } catch (err) {
       console.warn('Exception updating order status:', err);
     }
@@ -509,6 +400,23 @@ export async function updateOrderStatusInSupabase(orderId: string, status: Order
 
   const local = getStoredLocalOrders();
   const updated = local.map((o) => (o.id === orderId ? { ...o, status } : o));
+  saveStoredLocalOrders(updated);
+  return true;
+}
+
+export async function deleteOrderFromSupabase(orderId: string): Promise<boolean> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { error } = await sb.from('orders').delete().eq('id', orderId);
+      if (error) console.warn('Delete order error:', error.message);
+    } catch (err) {
+      console.warn('Exception deleting order:', err);
+    }
+  }
+
+  const local = getStoredLocalOrders();
+  const updated = local.filter((o) => o.id !== orderId);
   saveStoredLocalOrders(updated);
   return true;
 }
@@ -667,91 +575,144 @@ export async function uploadProductImageToSupabase(file: File): Promise<{ url: s
 }
 
 // ==========================================
-// SUPABASE AUTH OPERATIONS
+// AUTH OPERATIONS (EMAIL & PASSWORD)
 // ==========================================
 
-export async function supabaseSignUp(email: string, password: string, fullName?: string) {
-  const sb = getSupabase();
-  if (!sb) {
-    // Return mock successful auth for preview if credentials aren't set
-    const mockUser: User = {
-      id: `usr_${Date.now()}`,
-      app_metadata: {},
-      user_metadata: { full_name: fullName },
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email,
-    };
-    localStorage.setItem('dirace_supabase_mock_user', JSON.stringify(mockUser));
-    return { user: mockUser, error: null };
+interface LocalAccount {
+  id: string;
+  email: string;
+  password: string;
+  fullName: string;
+  created_at: string;
+}
+
+const LOCAL_ACCOUNTS_KEY = 'dirace_registered_accounts';
+const ACTIVE_SESSION_KEY = 'dirace_active_user_session';
+
+function getStoredLocalAccounts(): LocalAccount[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredLocalAccounts(accs: LocalAccount[]) {
+  try {
+    localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(accs));
+  } catch (e) {
+    console.warn('Could not save local accounts', e);
+  }
+}
+
+export async function supabaseSignUp(email: string, password: string, fullName?: string): Promise<{ user: User | null; error: string | null }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !password) {
+    return { user: null, error: 'Please provide both a valid email address and password.' };
+  }
+  if (password.length < 6) {
+    return { user: null, error: 'Password must be at least 6 characters.' };
   }
 
-  const { data, error } = await sb.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
       },
-    },
-  });
-
-  return { user: data.user, error: error?.message || null };
-}
-
-export async function supabaseSignIn(email: string, password: string) {
-  const sb = getSupabase();
-  if (!sb) {
-    const mockUser: User = {
-      id: `usr_${Date.now()}`,
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email,
-    };
-    localStorage.setItem('dirace_supabase_mock_user', JSON.stringify(mockUser));
-    return { user: mockUser, error: null };
+    });
+    return { user: data.user, error: error?.message || null };
   }
 
-  const { data, error } = await sb.auth.signInWithPassword({
-    email,
+  // Local fallback authentication
+  const accounts = getStoredLocalAccounts();
+  const existing = accounts.find((a) => a.email === cleanEmail);
+  if (existing) {
+    return { user: null, error: 'An account with this email address already exists. Please sign in.' };
+  }
+
+  const newAcc: LocalAccount = {
+    id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    email: cleanEmail,
     password,
-  });
+    fullName: fullName?.trim() || cleanEmail.split('@')[0],
+    created_at: new Date().toISOString(),
+  };
 
-  return { user: data.user, error: error?.message || null };
+  accounts.push(newAcc);
+  saveStoredLocalAccounts(accounts);
+
+  const userObj: User = {
+    id: newAcc.id,
+    app_metadata: {},
+    user_metadata: { full_name: newAcc.fullName },
+    aud: 'authenticated',
+    created_at: newAcc.created_at,
+    email: newAcc.email,
+  };
+
+  try {
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(userObj));
+  } catch (e) {}
+
+  return { user: userObj, error: null };
 }
 
-export async function supabaseSignInWithGoogle() {
-  const sb = getSupabase();
-  if (!sb) {
-    const mockUser: User = {
-      id: `usr_${Date.now()}`,
-      app_metadata: {},
-      user_metadata: { full_name: 'Google User' },
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email: 'user@gmail.com',
-    };
-    localStorage.setItem('dirace_supabase_mock_user', JSON.stringify(mockUser));
-    return { user: mockUser, error: null };
+export async function supabaseSignIn(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !password) {
+    return { user: null, error: 'Please enter both your email address and password.' };
   }
 
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: window.location.origin + '/account',
-    },
-  });
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+    return { user: data.user, error: error?.message || null };
+  }
 
-  return { error: error?.message || null };
+  // Local fallback authentication
+  const accounts = getStoredLocalAccounts();
+  const matched = accounts.find((a) => a.email === cleanEmail);
+
+  if (!matched) {
+    // If no accounts yet, automatically create this first account or report clear error
+    return { user: null, error: 'Account not found. Please verify your email or switch to "Create Account".' };
+  }
+
+  if (matched.password !== password) {
+    return { user: null, error: 'Incorrect password. Please verify your credentials and try again.' };
+  }
+
+  const userObj: User = {
+    id: matched.id,
+    app_metadata: {},
+    user_metadata: { full_name: matched.fullName },
+    aud: 'authenticated',
+    created_at: matched.created_at,
+    email: matched.email,
+  };
+
+  try {
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(userObj));
+  } catch (e) {}
+
+  return { user: userObj, error: null };
 }
 
-export async function supabaseSignOut() {
+export async function supabaseSignOut(): Promise<boolean> {
   const sb = getSupabase();
   if (sb) {
     await sb.auth.signOut();
   }
+  localStorage.removeItem(ACTIVE_SESSION_KEY);
   localStorage.removeItem('dirace_supabase_mock_user');
   return true;
 }
@@ -759,111 +720,19 @@ export async function supabaseSignOut() {
 export async function getSupabaseCurrentUser(): Promise<User | null> {
   const sb = getSupabase();
   if (sb) {
-    const { data } = await sb.auth.getUser();
-    if (data.user) return data.user;
+    try {
+      const { data } = await sb.auth.getUser();
+      if (data.user) return data.user;
+    } catch {
+      // ignore
+    }
   }
 
-  const local = localStorage.getItem('dirace_supabase_mock_user');
-  if (local) {
-    try {
-      return JSON.parse(local);
-    } catch {
-      return null;
-    }
+  try {
+    const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    return null;
   }
   return null;
 }
-
-// ==========================================
-// SUPABASE SQL MIGRATION TEMPLATE
-// ==========================================
-export const SUPABASE_SQL_SCHEMA = `-- ====================================================
--- DIRACE STOREFRONT SUPABASE DATABASE SCHEMA
--- Run this in your Supabase Project -> SQL Editor
--- ====================================================
-
--- 1. Products Table
-CREATE TABLE IF NOT EXISTS public.products (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  category TEXT NOT NULL,
-  price NUMERIC NOT NULL,
-  image TEXT NOT NULL,
-  alt TEXT NOT NULL DEFAULT '',
-  badge TEXT,
-  description TEXT NOT NULL DEFAULT '',
-  sizes JSONB NOT NULL DEFAULT '["S", "M", "L"]'::jsonb,
-  stock INTEGER DEFAULT 10,
-  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- Enable RLS on products
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public products are viewable by everyone" ON public.products FOR SELECT USING (true);
-CREATE POLICY "Enable insert for authenticated users or public" ON public.products FOR INSERT WITH CHECK (true);
-CREATE POLICY "Enable update for authenticated users or public" ON public.products FOR UPDATE USING (true);
-CREATE POLICY "Enable delete for authenticated users or public" ON public.products FOR DELETE USING (true);
-
--- 2. Orders Table
-CREATE TABLE IF NOT EXISTS public.orders (
-  id TEXT PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  customer_name TEXT NOT NULL,
-  customer_email TEXT NOT NULL,
-  shipping_address TEXT NOT NULL,
-  city TEXT NOT NULL DEFAULT '',
-  postcode TEXT NOT NULL DEFAULT '',
-  total_amount NUMERIC NOT NULL,
-  status TEXT NOT NULL DEFAULT 'Pending',
-  items JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- Enable RLS on orders
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view their own orders or all if admin" ON public.orders FOR SELECT USING (true);
-CREATE POLICY "Anyone can create orders" ON public.orders FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admins can update order status" ON public.orders FOR UPDATE USING (true);
-
--- 3. Wishlist Table
-CREATE TABLE IF NOT EXISTS public.wishlist (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  product_id TEXT REFERENCES public.products(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE public.wishlist ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Wishlist viewable by owner" ON public.wishlist FOR ALL USING (true);
-
--- 4. Supabase Storage Bucket for Products
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('products', 'products', true)
-ON CONFLICT (id) DO NOTHING;
-
-CREATE POLICY "Public Access for products bucket" 
-ON storage.objects FOR SELECT 
-USING (bucket_id = 'products');
-
-CREATE POLICY "Public Upload for products bucket" 
-ON storage.objects FOR INSERT 
-WITH CHECK (bucket_id = 'products');
-
--- 5. Product Reviews Table
-CREATE TABLE IF NOT EXISTS public.reviews (
-  id TEXT PRIMARY KEY,
-  product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  user_name TEXT NOT NULL,
-  user_email TEXT,
-  rating SMALLINT NOT NULL CHECK (rating >= 1 AND rating <= 5),
-  comment TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- Enable RLS on reviews
-ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public reviews are viewable by everyone" ON public.reviews FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can create reviews" ON public.reviews FOR INSERT WITH CHECK (true);
-CREATE POLICY "Users or admins can delete reviews" ON public.reviews FOR DELETE USING (true);
-`;

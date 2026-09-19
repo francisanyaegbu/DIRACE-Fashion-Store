@@ -83,7 +83,7 @@ a { color: inherit; text-decoration: none; }
 .accent { color: hsl(var(--accent)); }
 
 .topbar { height: 36px; display: flex; align-items: center; justify-content: center; background: hsl(var(--foreground)); color: hsl(var(--background)); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
-.nav { height: 82px; display: flex; align-items: center; border-bottom: 1px solid hsl(var(--border)); position: relative; z-index: 20; background: hsl(var(--background) / .93); backdrop-filter: blur(10px); }
+.nav { height: 82px; display: flex; align-items: center; border-bottom: 1px solid hsl(var(--border)); position: sticky; top: 0; z-index: 50; background: hsl(var(--background) / .96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .nav-inner { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .wordmark { font-family: var(--app-font-serif); font-size: 28px; font-weight: 700; letter-spacing: -.1em; }
 .brand-lockup { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: inherit; transition: opacity .2s ease; user-select: none; }
@@ -116,7 +116,9 @@ a { color: inherit; text-decoration: none; }
 .marquee-track { display: inline-flex; gap: 34px; animation: marquee 24s linear infinite; }
 .marquee span { font: 11px var(--app-font-mono); letter-spacing: .15em; text-transform: uppercase; }
 .marquee .dot { color: hsl(var(--accent)); font-size: 16px; }
-@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-40%); } }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
 
 .section { padding: 110px 0; }
 .section-head { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 38px; }
