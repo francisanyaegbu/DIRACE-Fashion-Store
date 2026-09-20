@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build -w @workspace/dirace-store",
+  "outputDirectory": "artifacts/dirace-store/dist/public",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
