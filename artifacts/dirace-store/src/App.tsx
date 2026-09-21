@@ -20,6 +20,12 @@ import {
   Copy,
   Database,
   ShieldCheck,
+  ShieldAlert,
+  Lock,
+  Unlock,
+  KeyRound,
+  EyeOff,
+  LogOut,
   RefreshCw,
   Package,
   Layers,
@@ -32,6 +38,9 @@ import {
   Download,
   Printer,
   Loader2,
+  AlertTriangle,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useRoute } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -46,6 +55,8 @@ import {
   createOrderInSupabase,
   updateOrderStatusInSupabase,
   deleteOrderFromSupabase,
+  purgeTestOrdersFromSupabase,
+  clearAllOrdersFromSupabase,
   fetchReviewsFromSupabase,
   createReviewInSupabase,
   deleteReviewFromSupabase,
@@ -54,6 +65,9 @@ import {
   supabaseSignIn,
   supabaseSignOut,
   getSupabaseCurrentUser,
+  verifyUserIsAdmin,
+  adminLogin,
+  KNOWN_ADMIN_EMAILS,
   type Product,
   type Order,
   type Review,
@@ -2313,7 +2327,7 @@ function Checkout({ items }: { items: CartItem[] }) {
             <input
               id="checkout-card"
               inputMode="numeric"
-              placeholder="•••• •••• •••• 4242"
+              placeholder="•••• •••• •••• ••••"
               required
               data-testid="input-checkout-card"
             />
@@ -2696,9 +2710,93 @@ function Admin() {
   } = useStore();
   const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'reviews'>('inventory');
 
+  // Studio Admin Authentication States
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminAuthChecking, setAdminAuthChecking] = useState(true);
+  const [adminUser, setAdminUser] = useState<{ email: string; name?: string; role?: string } | null>(null);
+  const [adminEmailInput, setAdminEmailInput] = useState('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+  const [adminAuthSubmitting, setAdminAuthSubmitting] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+
+  // Check existing session or cached credentials on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function checkAdminClearance() {
+      try {
+        const storedAdmin = sessionStorage.getItem('dirace_admin_auth_user');
+        if (storedAdmin) {
+          try {
+            const parsed = JSON.parse(storedAdmin);
+            if (parsed?.email) {
+              const isVerified = await verifyUserIsAdmin({ email: parsed.email } as any);
+              if (isVerified && isMounted) {
+                setAdminUser(parsed);
+                setIsAdminAuthenticated(true);
+                setAdminAuthChecking(false);
+                return;
+              }
+            }
+          } catch (e) {}
+        }
+
+        const currentUser = await getSupabaseCurrentUser();
+        if (currentUser && currentUser.email) {
+          const isVerified = await verifyUserIsAdmin(currentUser);
+          if (isVerified && isMounted) {
+            const adminObj = {
+              email: currentUser.email,
+              name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
+              role: 'admin',
+            };
+            setAdminUser(adminObj);
+            setIsAdminAuthenticated(true);
+            sessionStorage.setItem('dirace_admin_auth_user', JSON.stringify(adminObj));
+          }
+        }
+      } catch (err) {
+        console.warn('Admin clearance verification error:', err);
+      } finally {
+        if (isMounted) setAdminAuthChecking(false);
+      }
+    }
+    checkAdminClearance();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminAuthError(null);
+    setAdminAuthSubmitting(true);
+
+    try {
+      const res = await adminLogin(adminEmailInput, adminPasswordInput);
+      if (res.success && res.user) {
+        setAdminUser(res.user);
+        setIsAdminAuthenticated(true);
+        sessionStorage.setItem('dirace_admin_auth_user', JSON.stringify(res.user));
+        setAdminPasswordInput('');
+        setAdminAuthError(null);
+      } else {
+        setAdminAuthError(res.error || 'Invalid administrator login credentials.');
+      }
+    } finally {
+      setAdminAuthSubmitting(false);
+    }
+  };
+
+  const handleAdminSignOut = () => {
+    setIsAdminAuthenticated(false);
+    setAdminUser(null);
+    sessionStorage.removeItem('dirace_admin_auth_user');
+  };
+
   // Delete Confirmation Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'piece' | 'order' | 'review';
+    type: 'piece' | 'order' | 'review' | 'all-orders';
     id: string;
     name: string;
   } | null>(null);
@@ -2707,6 +2805,10 @@ function Admin() {
   // Search & Filter States
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryCategory, setInventoryCategory] = useState('All');
+  const [inventoryStockFilter, setInventoryStockFilter] = useState<'All' | 'low' | 'out' | 'healthy'>('All');
+  const [updatingStockId, setUpdatingStockId] = useState<string | null>(null);
+
+  const LOW_STOCK_THRESHOLD = 5;
 
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('All');
@@ -2728,6 +2830,7 @@ function Admin() {
     name: '',
     category: 'Outerwear',
     price: 250000,
+    stock: 12,
     description: '',
     badge: 'New Arrival',
     image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80',
@@ -2741,6 +2844,7 @@ function Admin() {
     name: '',
     category: 'Outerwear',
     price: 250000,
+    stock: 10,
     description: '',
     badge: '',
     image: '',
@@ -2755,6 +2859,21 @@ function Admin() {
 
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
+  // Stock Analysis
+  const lowStockProducts = useMemo(() => {
+    return products.filter((p) => {
+      const s = typeof p.stock === 'number' ? p.stock : (p.stock != null ? Number(p.stock) : 0);
+      return s < LOW_STOCK_THRESHOLD;
+    });
+  }, [products]);
+
+  const outOfStockProducts = useMemo(() => {
+    return products.filter((p) => {
+      const s = typeof p.stock === 'number' ? p.stock : (p.stock != null ? Number(p.stock) : 0);
+      return s <= 0;
+    });
+  }, [products]);
+
   // Filtered lists
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -2764,9 +2883,20 @@ function Admin() {
         p.id.toLowerCase().includes(inventorySearch.toLowerCase()) ||
         p.category.toLowerCase().includes(inventorySearch.toLowerCase());
       const matchCategory = inventoryCategory === 'All' || p.category.toLowerCase() === inventoryCategory.toLowerCase();
-      return matchSearch && matchCategory;
+
+      const s = typeof p.stock === 'number' ? p.stock : (p.stock != null ? Number(p.stock) : 0);
+      let matchStock = true;
+      if (inventoryStockFilter === 'low') {
+        matchStock = s > 0 && s < LOW_STOCK_THRESHOLD;
+      } else if (inventoryStockFilter === 'out') {
+        matchStock = s <= 0;
+      } else if (inventoryStockFilter === 'healthy') {
+        matchStock = s >= LOW_STOCK_THRESHOLD;
+      }
+
+      return matchSearch && matchCategory && matchStock;
     });
-  }, [products, inventorySearch, inventoryCategory]);
+  }, [products, inventorySearch, inventoryCategory, inventoryStockFilter]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
@@ -2841,6 +2971,7 @@ function Admin() {
         name: newPiece.name,
         category: newPiece.category,
         price: Number(newPiece.price),
+        stock: Number(newPiece.stock) >= 0 ? Number(newPiece.stock) : 0,
         description: newPiece.description,
         badge: newPiece.badge || undefined,
         image: newPiece.image,
@@ -2853,6 +2984,7 @@ function Admin() {
         name: '',
         category: 'Outerwear',
         price: 250000,
+        stock: 12,
         description: '',
         badge: 'New Arrival',
         image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80',
@@ -2870,6 +3002,7 @@ function Admin() {
       name: p.name,
       category: p.category,
       price: p.price,
+      stock: typeof p.stock === 'number' ? p.stock : (p.stock != null ? Number(p.stock) : 10),
       description: p.description || '',
       badge: p.badge || '',
       image: p.image,
@@ -2890,6 +3023,7 @@ function Admin() {
         name: editForm.name,
         category: editForm.category,
         price: Number(editForm.price),
+        stock: Number(editForm.stock) >= 0 ? Number(editForm.stock) : 0,
         description: editForm.description,
         badge: editForm.badge || undefined,
         image: editForm.image,
@@ -2901,6 +3035,20 @@ function Admin() {
       await refreshProducts();
     } finally {
       setIsUpdatingPiece(false);
+    }
+  };
+
+  const handleQuickStockAdjust = async (product: Product, delta: number) => {
+    setUpdatingStockId(product.id);
+    try {
+      const current = typeof product.stock === 'number' ? product.stock : (product.stock != null ? Number(product.stock) : 0);
+      const next = Math.max(0, current + delta);
+      await updateProductInSupabase(product.id, { stock: next });
+      await refreshProducts();
+    } catch (e) {
+      console.warn('Failed to adjust stock:', e);
+    } finally {
+      setUpdatingStockId(null);
     }
   };
 
@@ -2916,6 +3064,10 @@ function Admin() {
         if (inspectedOrder?.id === id) {
           setInspectedOrder(null);
         }
+      } else if (type === 'all-orders') {
+        await clearAllOrdersFromSupabase();
+        setInspectedOrder(null);
+        await refreshOrders();
       } else if (type === 'review') {
         await deleteReview(id);
       }
@@ -3029,6 +3181,211 @@ function Admin() {
     window.setTimeout(() => setRefreshingReviews(false), 600);
   };
 
+  // Gate 1: Verification in progress
+  if (adminAuthChecking) {
+    return (
+      <main className="page-wrap" style={{ minHeight: '65vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Loader2 size={32} className="animate-spin" style={{ margin: '0 auto 18px', opacity: 0.65 }} />
+          <div className="eyebrow accent" style={{ letterSpacing: '0.12em' }}>
+            Verifying Studio Administrative Clearance...
+          </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+            Checking authenticated credentials against directory
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // Gate 2: Unauthenticated / Unauthorized Access Barrier
+  if (!isAdminAuthenticated) {
+    return (
+      <main className="page-wrap" style={{ paddingBottom: 120, minHeight: '75vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 520, margin: '50px auto' }}>
+          <div
+            className="account-panel"
+            style={{
+              padding: '40px 36px',
+              border: '1px solid hsl(var(--foreground))',
+              background: 'hsl(var(--background))',
+              boxShadow: '0 12px 36px -10px hsl(0 0% 0% / 0.08)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
+              <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Lock size={12} />
+                DIRACE / Restricted Studio Archive
+              </div>
+              <span
+                className="mono"
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  padding: '3px 8px',
+                  background: 'hsl(0 0% 92%)',
+                  border: '1px solid hsl(var(--border))',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                RESTRICTED PORTAL
+              </span>
+            </div>
+
+            <h1 className="display" style={{ fontSize: 'clamp(32px, 5vw, 44px)', margin: '0 0 10px', lineHeight: 1 }}>
+              STUDIO ADMIN.
+            </h1>
+            <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 28 }}>
+              This operational control room manages catalog silhouettes, client orders, and sales records. Please enter your authorized administrator credentials to unlock access.
+            </p>
+
+            {adminAuthError && (
+              <div
+                role="alert"
+                style={{
+                  padding: '12px 14px',
+                  marginBottom: 22,
+                  background: 'hsl(0 85% 96%)',
+                  border: '1px solid hsl(0 75% 80%)',
+                  color: 'hsl(0 75% 35%)',
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  lineHeight: 1.5,
+                }}
+              >
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div>{adminAuthError}</div>
+              </div>
+            )}
+
+            <form onSubmit={handleAdminLoginSubmit} style={{ display: 'grid', gap: 20 }}>
+              <div className="field">
+                <label htmlFor="admin-email-input" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Administrator Email</span>
+                  <span className="muted" style={{ textTransform: 'none', fontSize: 10 }}>Authorized administrator</span>
+                </label>
+                <input
+                  id="admin-email-input"
+                  type="email"
+                  value={adminEmailInput}
+                  onChange={(e) => setAdminEmailInput(e.target.value)}
+                  placeholder="admin@dirace.com"
+                  required
+                  autoComplete="email"
+                  style={{
+                    padding: '12px 12px',
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(0 0% 98%)',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="admin-password-input" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Administrator Password</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    style={{
+                      background: 'none',
+                      border: 0,
+                      padding: 0,
+                      cursor: 'pointer',
+                      fontSize: 10,
+                      color: 'hsl(var(--muted-foreground))',
+                      fontFamily: 'inherit',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    {showAdminPassword ? <EyeOff size={11} /> : <Eye size={11} />}
+                    {showAdminPassword ? 'Hide Password' : 'Show Password'}
+                  </button>
+                </label>
+                <input
+                  id="admin-password-input"
+                  type={showAdminPassword ? 'text' : 'password'}
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  placeholder="Enter administrator password"
+                  required
+                  autoComplete="current-password"
+                  style={{
+                    padding: '12px 12px',
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(0 0% 98%)',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                id="admin-login-submit-btn"
+                className="btn-primary"
+                disabled={adminAuthSubmitting}
+                style={{
+                  width: '100%',
+                  marginTop: 6,
+                  padding: '15px 22px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  cursor: adminAuthSubmitting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {adminAuthSubmitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>VERIFYING PRIVILEGES...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound size={14} />
+                    <span>UNLOCK STUDIO CONTROL ROOM</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div
+              style={{
+                marginTop: 28,
+                paddingTop: 20,
+                borderTop: '1px solid hsl(var(--border))',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 12,
+              }}
+            >
+              <Link
+                href="/"
+                className="muted"
+                style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                &larr; Return to Storefront
+              </Link>
+              <span
+                className="mono muted"
+                style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <ShieldCheck size={12} /> 256-Bit TLS Clearance
+              </span>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Gate 3: Authorized Studio Admin view
   return (
     <main className="page-wrap" style={{ paddingBottom: 120 }}>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
@@ -3036,7 +3393,56 @@ function Admin() {
           <div className="eyebrow accent">DIRACE / Studio</div>
           <h1 className="display">CONTROL ROOM.</h1>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span
+            className="mono"
+            style={{
+              padding: '6px 12px',
+              background: 'hsl(142 60% 96%)',
+              border: '1px solid hsl(142 50% 80%)',
+              color: 'hsl(142 70% 25%)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: 'hsl(142 65% 42%)',
+                boxShadow: '0 0 0 2px hsl(142 65% 85%)',
+              }}
+            />
+            Clearance Active: {adminUser?.email || 'Administrator'}
+          </span>
+          <button
+            type="button"
+            id="admin-lock-portal-btn"
+            onClick={handleAdminSignOut}
+            title="Lock Studio Admin Portal"
+            className="mono"
+            style={{
+              padding: '6px 12px',
+              background: 'hsl(0 0% 94%)',
+              border: '1px solid hsl(var(--border))',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background .15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'hsl(0 0% 88%)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'hsl(0 0% 94%)')}
+          >
+            <Lock size={12} />
+            Lock Portal
+          </button>
           <span
             className="mono"
             style={{
@@ -3105,7 +3511,12 @@ function Admin() {
           className="stat-card"
           role="button"
           tabIndex={0}
-          onClick={() => setActiveTab('inventory')}
+          onClick={() => {
+            setActiveTab('inventory');
+            if (lowStockProducts.length > 0) {
+              setInventoryStockFilter('low');
+            }
+          }}
           title="Click to manage catalog inventory"
           style={{ cursor: 'pointer', transition: 'all .15s ease' }}
         >
@@ -3114,7 +3525,15 @@ function Admin() {
             <ArrowRight size={13} className="muted" />
           </div>
           <strong>{products.length}</strong>
-          <span className="mono muted">Live catalog pieces &rarr;</span>
+          <span className="mono">
+            {lowStockProducts.length > 0 ? (
+              <span style={{ color: 'hsl(30 90% 32%)', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                <AlertTriangle size={12} /> {lowStockProducts.length} low stock {lowStockProducts.length === 1 ? 'alert' : 'alerts'} &rarr;
+              </span>
+            ) : (
+              <span className="muted">Live catalog pieces &rarr;</span>
+            )}
+          </span>
         </div>
       </div>
 
@@ -3138,10 +3557,28 @@ function Admin() {
             fontWeight: activeTab === 'inventory' ? 600 : 400,
             cursor: 'pointer',
             whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
           }}
           onClick={() => setActiveTab('inventory')}
         >
           01 / Inventory & Pieces ({products.length})
+          {lowStockProducts.length > 0 && (
+            <span
+              style={{
+                fontSize: 10,
+                padding: '2px 6px',
+                background: 'hsl(38 95% 90%)',
+                color: 'hsl(30 90% 25%)',
+                border: '1px solid hsl(38 85% 75%)',
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+            >
+              {lowStockProducts.length} LOW
+            </span>
+          )}
         </button>
         <button
           className={`mono ${activeTab === 'orders' ? 'accent' : 'muted'}`}
@@ -3203,6 +3640,92 @@ function Admin() {
             </button>
           </div>
 
+          {/* Low Stock Alert Notice Banner */}
+          {lowStockProducts.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+                padding: '14px 18px',
+                background: 'hsl(38 100% 97%)',
+                border: '1px solid hsl(38 85% 80%)',
+                marginBottom: 20,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    background: 'hsl(38 95% 90%)',
+                    border: '1px solid hsl(38 85% 75%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertTriangle size={17} style={{ color: 'hsl(30 95% 35%)' }} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <strong style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'hsl(30 90% 25%)' }}>
+                      Low Stock Inventory Alert
+                    </strong>
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: 10,
+                        padding: '1px 6px',
+                        background: 'hsl(38 95% 90%)',
+                        color: 'hsl(30 90% 25%)',
+                        border: '1px solid hsl(38 85% 75%)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {lowStockProducts.length} {lowStockProducts.length === 1 ? 'piece' : 'pieces'} under 5 units
+                    </span>
+                  </div>
+                  <p className="mono muted" style={{ margin: '3px 0 0', fontSize: 11, color: 'hsl(30 70% 30%)' }}>
+                    {outOfStockProducts.length > 0 ? `${outOfStockProducts.length} depleted (0 stock) · ` : ''}
+                    Pieces highlighted in warm amber require replenishment. Use the quick controls below to adjust units.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {inventoryStockFilter === 'low' ? (
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    style={{ fontSize: 11, padding: '6px 12px' }}
+                    onClick={() => setInventoryStockFilter('All')}
+                  >
+                    View All Pieces
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    style={{
+                      fontSize: 11,
+                      padding: '6px 12px',
+                      background: 'hsl(38 95% 91%)',
+                      borderColor: 'hsl(38 80% 75%)',
+                      color: 'hsl(30 90% 22%)',
+                      fontWeight: 600,
+                    }}
+                    onClick={() => setInventoryStockFilter('low')}
+                  >
+                    Filter Low Stock ({lowStockProducts.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Search & Category Filter Controls */}
           <div
             style={{
@@ -3233,7 +3756,7 @@ function Admin() {
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span className="mono muted" style={{ fontSize: 11 }}>Category:</span>
                 <select
@@ -3258,12 +3781,33 @@ function Admin() {
                 </select>
               </div>
 
-              {(inventorySearch || inventoryCategory !== 'All') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="mono muted" style={{ fontSize: 11 }}>Stock:</span>
+                <select
+                  value={inventoryStockFilter}
+                  onChange={(e) => setInventoryStockFilter(e.target.value as any)}
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontFamily: 'inherit',
+                    background: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                  }}
+                >
+                  <option value="All">All Stock Levels</option>
+                  <option value="low">Low Stock (&lt; 5 units) {lowStockProducts.length > 0 ? `(${lowStockProducts.length})` : ''}</option>
+                  <option value="out">Out of Stock (0) {outOfStockProducts.length > 0 ? `(${outOfStockProducts.length})` : ''}</option>
+                  <option value="healthy">In Stock (5+ units)</option>
+                </select>
+              </div>
+
+              {(inventorySearch || inventoryCategory !== 'All' || inventoryStockFilter !== 'All') && (
                 <button
                   type="button"
                   onClick={() => {
                     setInventorySearch('');
                     setInventoryCategory('All');
+                    setInventoryStockFilter('All');
                   }}
                   className="mono muted"
                   style={{ background: 'none', border: 0, fontSize: 11, textDecoration: 'underline', cursor: 'pointer' }}
@@ -3348,6 +3892,20 @@ function Admin() {
                       placeholder="S, M, L, XL"
                       value={newPiece.sizes}
                       onChange={(e) => setNewPiece({ ...newPiece, sizes: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Stock Archive (Units)</span>
+                      <span className="mono muted" style={{ fontSize: 10 }}>Alert if &lt; 5</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      placeholder="12"
+                      value={newPiece.stock}
+                      onChange={(e) => setNewPiece({ ...newPiece, stock: Math.max(0, parseInt(e.target.value, 10) || 0) })}
                     />
                   </div>
                 </div>
@@ -3506,6 +4064,19 @@ function Admin() {
                       onChange={(e) => setEditForm({ ...editForm, sizes: e.target.value })}
                     />
                   </div>
+                  <div className="field">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Stock Archive (Units)</span>
+                      <span className="mono muted" style={{ fontSize: 10 }}>Alert if &lt; 5</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={editForm.stock}
+                      onChange={(e) => setEditForm({ ...editForm, stock: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
@@ -3600,6 +4171,7 @@ function Admin() {
                   <th>Image</th>
                   <th>Name & Category</th>
                   <th>Price (NGN)</th>
+                  <th>Stock & Status</th>
                   <th>Sizes</th>
                   <th>ID</th>
                   <th>Actions</th>
@@ -3608,65 +4180,249 @@ function Admin() {
               <tbody>
                 {filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: 40 }} className="muted">
+                    <td colSpan={7} style={{ textAlign: 'center', padding: 40 }} className="muted">
                       No pieces matched your search criteria.
                     </td>
                   </tr>
                 ) : (
-                  filteredProducts.map((p) => (
-                    <tr key={p.id}>
-                      <td style={{ width: 60 }}>
-                        <img
-                          src={p.image}
-                          alt={p.name}
-                          style={{ width: 44, height: 52, objectFit: 'cover', filter: 'saturate(.7)' }}
-                        />
-                      </td>
-                      <td>
-                        <strong>{p.name}</strong>
-                        <div className="muted" style={{ fontSize: 11 }}>
-                          {p.category} {p.badge ? `· ${p.badge}` : ''}
-                        </div>
-                      </td>
-                      <td className="mono">{money(p.price)}</td>
-                      <td className="mono" style={{ fontSize: 11 }}>
-                        {Array.isArray(p.sizes) ? p.sizes.join(', ') : 'S, M, L'}
-                      </td>
-                      <td className="mono muted" style={{ fontSize: 10 }}>
-                        {p.id}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Link
-                            href={`/product/${p.id}`}
-                            className="icon-btn"
-                            title="View piece in storefront"
-                            aria-label={`View ${p.name}`}
-                          >
-                            <Eye size={15} />
-                          </Link>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            onClick={() => handleStartEdit(p)}
-                            title="Edit piece specifications"
-                            aria-label={`Edit ${p.name}`}
-                          >
-                            <Edit3 size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            onClick={() => setDeleteConfirm({ type: 'piece', id: p.id, name: p.name })}
-                            aria-label={`Delete ${p.name}`}
-                            title="Delete piece"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  filteredProducts.map((p) => {
+                    const stockCount = typeof p.stock === 'number' ? p.stock : (p.stock != null ? Number(p.stock) : 0);
+                    const isOutOfStock = stockCount <= 0;
+                    const isLowStock = stockCount > 0 && stockCount < LOW_STOCK_THRESHOLD;
+
+                    return (
+                      <tr
+                        key={p.id}
+                        className={isOutOfStock ? 'row-out-of-stock' : isLowStock ? 'row-low-stock' : ''}
+                      >
+                        <td style={{ width: 60 }}>
+                          <img
+                            src={p.image}
+                            alt={p.name}
+                            style={{ width: 44, height: 52, objectFit: 'cover', filter: 'saturate(.7)' }}
+                          />
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <strong>{p.name}</strong>
+                            {isOutOfStock && (
+                              <span
+                                className="mono"
+                                style={{
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  padding: '1px 5px',
+                                  background: 'hsl(0 85% 92%)',
+                                  color: 'hsl(0 75% 38%)',
+                                  border: '1px solid hsl(0 75% 75%)',
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                Depleted
+                              </span>
+                            )}
+                            {isLowStock && (
+                              <span
+                                className="mono"
+                                style={{
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  padding: '1px 5px',
+                                  background: 'hsl(38 95% 88%)',
+                                  color: 'hsl(30 95% 25%)',
+                                  border: '1px solid hsl(38 85% 70%)',
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                Low Stock
+                              </span>
+                            )}
+                          </div>
+                          <div className="muted" style={{ fontSize: 11 }}>
+                            {p.category} {p.badge ? `· ${p.badge}` : ''}
+                          </div>
+                        </td>
+                        <td className="mono">{money(p.price)}</td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-start' }}>
+                            {isOutOfStock ? (
+                              <span
+                                className="mono"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                  padding: '3px 8px',
+                                  background: 'hsl(0 85% 94%)',
+                                  color: 'hsl(0 75% 38%)',
+                                  border: '1px solid hsl(0 75% 80%)',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <AlertCircle size={11} /> Out of Stock (0)
+                              </span>
+                            ) : isLowStock ? (
+                              <span
+                                className="mono"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                  padding: '3px 8px',
+                                  background: 'hsl(38 95% 90%)',
+                                  color: 'hsl(30 90% 25%)',
+                                  border: '1px solid hsl(38 85% 75%)',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <AlertTriangle size={11} /> Low Stock · {stockCount} Left
+                              </span>
+                            ) : (
+                              <span
+                                className="mono muted"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 10,
+                                  padding: '3px 8px',
+                                  background: 'hsl(0 0% 94%)',
+                                  border: '1px solid hsl(var(--border))',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <CheckCircle2 size={11} style={{ color: 'hsl(142 65% 38%)' }} /> {stockCount} in archive
+                              </span>
+                            )}
+
+                            {/* Quick Inline Adjustments */}
+                            <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid hsl(var(--border))', background: 'hsl(var(--background))' }}>
+                              <button
+                                type="button"
+                                disabled={updatingStockId === p.id || stockCount <= 0}
+                                onClick={() => handleQuickStockAdjust(p, -1)}
+                                title="Decrease stock by 1"
+                                aria-label={`Decrease stock for ${p.name}`}
+                                style={{
+                                  background: 'none',
+                                  border: 0,
+                                  padding: '2px 7px',
+                                  cursor: stockCount <= 0 || updatingStockId === p.id ? 'not-allowed' : 'pointer',
+                                  opacity: stockCount <= 0 ? 0.4 : 1,
+                                  fontSize: 11,
+                                  fontFamily: 'inherit',
+                                }}
+                              >
+                                -
+                              </button>
+                              <span
+                                className="mono"
+                                style={{
+                                  padding: '2px 8px',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  borderLeft: '1px solid hsl(var(--border))',
+                                  borderRight: '1px solid hsl(var(--border))',
+                                  color: isOutOfStock ? 'hsl(0 75% 38%)' : isLowStock ? 'hsl(30 90% 25%)' : 'inherit',
+                                  minWidth: 28,
+                                  textAlign: 'center',
+                                }}
+                              >
+                                {updatingStockId === p.id ? (
+                                  <Loader2 size={10} className="animate-spin" style={{ display: 'inline-block' }} />
+                                ) : (
+                                  stockCount
+                                )}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={updatingStockId === p.id}
+                                onClick={() => handleQuickStockAdjust(p, 1)}
+                                title="Increase stock by 1"
+                                aria-label={`Increase stock for ${p.name}`}
+                                style={{
+                                  background: 'none',
+                                  border: 0,
+                                  padding: '2px 7px',
+                                  cursor: updatingStockId === p.id ? 'not-allowed' : 'pointer',
+                                  fontSize: 11,
+                                  fontFamily: 'inherit',
+                                }}
+                              >
+                                +
+                              </button>
+                              {isOutOfStock && (
+                                <button
+                                  type="button"
+                                  disabled={updatingStockId === p.id}
+                                  onClick={() => handleQuickStockAdjust(p, 5)}
+                                  title="Quick restock +5 units"
+                                  style={{
+                                    background: 'hsl(0 0% 94%)',
+                                    border: 0,
+                                    borderLeft: '1px solid hsl(var(--border))',
+                                    padding: '2px 6px',
+                                    cursor: 'pointer',
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    fontFamily: 'inherit',
+                                  }}
+                                >
+                                  +5
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="mono" style={{ fontSize: 11 }}>
+                          {Array.isArray(p.sizes) ? p.sizes.join(', ') : 'S, M, L'}
+                        </td>
+                        <td className="mono muted" style={{ fontSize: 10 }}>
+                          {p.id}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Link
+                              href={`/product/${p.id}`}
+                              className="icon-btn"
+                              title="View piece in storefront"
+                              aria-label={`View ${p.name}`}
+                            >
+                              <Eye size={15} />
+                            </Link>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              onClick={() => handleStartEdit(p)}
+                              title="Edit piece specifications"
+                              aria-label={`Edit ${p.name}`}
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              onClick={() => setDeleteConfirm({ type: 'piece', id: p.id, name: p.name })}
+                              aria-label={`Delete ${p.name}`}
+                              title="Delete piece"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -3693,7 +4449,19 @@ function Admin() {
                 DISPATCHES & CLIENTS
               </h2>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {orders.length > 0 && (
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setDeleteConfirm({ type: 'all-orders', id: 'all_orders', name: 'All Client Orders' })}
+                  disabled={deletingId !== null}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'hsl(0 75% 45%)' }}
+                  title="Clear all recorded dispatches"
+                >
+                  <Trash2 size={13} /> Clear All Orders
+                </button>
+              )}
               <button
                 type="button"
                 className="secondary-btn"
@@ -4005,7 +4773,7 @@ function Admin() {
                   ))
                 ) : (
                   <div style={{ padding: 16 }} className="muted mono">
-                    Standard catalog items
+                    No items recorded
                   </div>
                 )}
                 <div
@@ -4083,7 +4851,7 @@ function Admin() {
                               ))}
                             </div>
                           ) : (
-                            <span className="muted">Standard items</span>
+                            <span className="muted">No items</span>
                           )}
                         </td>
                         <td className="mono" style={{ fontWeight: 700 }}>
@@ -4422,7 +5190,7 @@ function Admin() {
               DELETE PERMANENTLY?
             </h3>
             <p style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 24px', color: 'hsl(var(--foreground))' }}>
-              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove this {deleteConfirm.type === 'piece' ? 'catalog piece' : deleteConfirm.type === 'order' ? 'order record' : 'client reflection'}.
+              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove {deleteConfirm.type === 'piece' ? 'this catalog piece' : deleteConfirm.type === 'order' ? 'this order record' : deleteConfirm.type === 'all-orders' ? 'all client order records' : 'this client reflection'}.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button
@@ -4453,6 +5221,8 @@ function Admin() {
                   <>
                     <Loader2 size={13} className="animate-spin" /> Deleting...
                   </>
+                ) : deleteConfirm.type === 'all-orders' ? (
+                  'Clear All Orders'
                 ) : (
                   'Delete Record'
                 )}
@@ -4589,7 +5359,7 @@ function App() {
 
   useEffect(() => {
     refreshProducts();
-    refreshOrders();
+    purgeTestOrdersFromSupabase().finally(() => refreshOrders());
     refreshReviews();
     refreshUser();
   }, []);

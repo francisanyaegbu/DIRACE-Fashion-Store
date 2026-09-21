@@ -127,10 +127,48 @@ export const saveStoredLocalProducts = (items: Product[]) => {
   }
 };
 
+export const isTestOrder = (o: any): boolean => {
+  if (!o || typeof o !== 'object') return false;
+  const id = String(o.id || '').toLowerCase();
+  const name = String(o.customer_name || '').toLowerCase();
+  const email = String(o.customer_email || '').toLowerCase();
+  const address = String(o.shipping_address || '').toLowerCase();
+  const city = String(o.city || '').toLowerCase();
+  const postcode = String(o.postcode || '').toLowerCase();
+
+  return (
+    id.includes('test') ||
+    id.startsWith('ord_test') ||
+    id.includes('demo') ||
+    id.includes('sample') ||
+    name.includes('test') ||
+    name.includes('demo') ||
+    name.includes('sample') ||
+    email.includes('test@') ||
+    email.includes('@example.com') ||
+    email.includes('@test.com') ||
+    email.includes('demo@') ||
+    address.includes('test') ||
+    address.includes('demo') ||
+    city.includes('test') ||
+    postcode.includes('test')
+  );
+};
+
 export const getStoredLocalOrders = (): Order[] => {
   try {
     const raw = localStorage.getItem(LOCAL_ORDERS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Strip out test and demo orders
+        const clean = parsed.filter((o: any) => !isTestOrder(o));
+        if (clean.length !== parsed.length) {
+          localStorage.setItem(LOCAL_ORDERS_KEY, JSON.stringify(clean));
+        }
+        return clean;
+      }
+    }
   } catch (e) {
     console.warn('Could not parse local orders', e);
   }
@@ -139,7 +177,8 @@ export const getStoredLocalOrders = (): Order[] => {
 
 export const saveStoredLocalOrders = (orders: Order[]) => {
   try {
-    localStorage.setItem(LOCAL_ORDERS_KEY, JSON.stringify(orders));
+    const clean = orders.filter((o) => !isTestOrder(o));
+    localStorage.setItem(LOCAL_ORDERS_KEY, JSON.stringify(clean));
   } catch (e) {
     console.warn('Could not save local orders', e);
   }
@@ -350,7 +389,8 @@ export async function fetchOrdersFromSupabase(): Promise<Order[]> {
       return getStoredLocalOrders();
     }
 
-    return (data as Order[]) || [];
+    const rawList = (data as Order[]) || [];
+    return rawList.filter((o) => !isTestOrder(o));
   } catch (err) {
     console.warn('Exception querying Supabase orders:', err);
     return getStoredLocalOrders();
@@ -418,6 +458,38 @@ export async function deleteOrderFromSupabase(orderId: string): Promise<boolean>
   const local = getStoredLocalOrders();
   const updated = local.filter((o) => o.id !== orderId);
   saveStoredLocalOrders(updated);
+  return true;
+}
+
+export async function purgeTestOrdersFromSupabase(): Promise<{ success: boolean; count: number; error?: string }> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from('orders').delete().ilike('id', '%test%');
+      await sb.from('orders').delete().ilike('customer_name', '%test%');
+      await sb.from('orders').delete().ilike('customer_email', '%test%');
+      await sb.from('orders').delete().ilike('shipping_address', '%test%');
+    } catch (err: any) {
+      console.warn('Exception purging test orders from Supabase:', err);
+    }
+  }
+
+  const local = getStoredLocalOrders();
+  saveStoredLocalOrders(local);
+  return { success: true, count: 0 };
+}
+
+export async function clearAllOrdersFromSupabase(): Promise<boolean> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from('orders').delete().neq('id', 'non_existent_id');
+    } catch (err) {
+      console.warn('Exception clearing all orders from Supabase:', err);
+    }
+  }
+
+  localStorage.removeItem(LOCAL_ORDERS_KEY);
   return true;
 }
 
@@ -615,6 +687,42 @@ export async function supabaseSignUp(email: string, password: string, fullName?:
     return { user: null, error: 'Password must be at least 6 characters.' };
   }
 
+  // 1. First attempt instant auto-confirmed registration via our backend API
+  // This completely eliminates email confirmation by setting email_confirm: true directly in Supabase
+  try {
+    const apiRes = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password, fullName }),
+    });
+
+    const apiData = await apiRes.json().catch(() => null);
+
+    if (apiRes.ok && apiData?.success) {
+      // User created and confirmed immediately; now sign in directly to establish the active browser session
+      const sb = getSupabase();
+      if (sb) {
+        const { data: signInData, error: signInErr } = await sb.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+        if (signInData?.user) {
+          return { user: signInData.user, error: null };
+        }
+        if (signInErr) {
+          console.warn('Sign-in after instant signup warning:', signInErr);
+        }
+      }
+      if (apiData.user) {
+        return { user: apiData.user, error: null };
+      }
+    } else if (!apiRes.ok && apiData?.error) {
+      return { user: null, error: apiData.error };
+    }
+  } catch (e) {
+    console.warn('Backend auto-confirm signup unavailable, falling back to direct auth', e);
+  }
+
   const sb = getSupabase();
   if (sb) {
     const { data, error } = await sb.auth.signUp({
@@ -626,7 +734,18 @@ export async function supabaseSignUp(email: string, password: string, fullName?:
         },
       },
     });
-    return { user: data.user, error: error?.message || null };
+
+    if (error) {
+      return { user: null, error: error.message };
+    }
+
+    // Attempt immediate direct sign in
+    const { data: immediateSign } = await sb.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    return { user: immediateSign?.user || data.user, error: null };
   }
 
   // Local fallback authentication
@@ -714,6 +833,7 @@ export async function supabaseSignOut(): Promise<boolean> {
   }
   localStorage.removeItem(ACTIVE_SESSION_KEY);
   localStorage.removeItem('dirace_supabase_mock_user');
+  sessionStorage.removeItem('dirace_admin_auth_user');
   return true;
 }
 
@@ -735,4 +855,139 @@ export async function getSupabaseCurrentUser(): Promise<User | null> {
     return null;
   }
   return null;
+}
+
+export const KNOWN_ADMIN_EMAILS = [
+  'anyaegbufrancis34@gmail.com',
+];
+
+/**
+ * Checks if a given user object qualifies for studio administrator privileges.
+ */
+export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
+  if (!user || !user.email) return false;
+  const cleanEmail = user.email.trim().toLowerCase();
+
+  // Known administrator account
+  if (KNOWN_ADMIN_EMAILS.includes(cleanEmail)) {
+    return true;
+  }
+
+  // Role metadata check
+  if (
+    user.app_metadata?.role === 'admin' ||
+    user.user_metadata?.role === 'admin' ||
+    user.user_metadata?.is_admin === true
+  ) {
+    return true;
+  }
+
+  // Backend verification check
+  try {
+    const res = await fetch('/api/auth/admin-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return !!data.authorized;
+    }
+  } catch (e) {
+    console.warn('Admin verify check failed', e);
+  }
+
+  return false;
+}
+
+/**
+ * Authenticates against administrator credentials.
+ */
+export async function adminLogin(
+  email: string,
+  password: string
+): Promise<{ success: boolean; user: { email: string; name?: string; role?: string } | null; error: string | null }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !password) {
+    return { success: false, user: null, error: 'Please provide both your administrator email and password.' };
+  }
+
+  // 1. Try backend admin login endpoint
+  try {
+    const res = await fetch('/api/auth/admin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data?.authorized) {
+      // Establish client supabase session as well if supabase is configured
+      const sb = getSupabase();
+      if (sb) {
+        await sb.auth.signInWithPassword({ email: cleanEmail, password }).catch(() => {});
+      }
+      return { success: true, user: data.user, error: null };
+    }
+
+    if (!res.ok && data?.error) {
+      return { success: false, user: null, error: data.error };
+    }
+  } catch (e) {
+    console.warn('Backend admin login endpoint unavailable, attempting direct Supabase login', e);
+  }
+
+  // 2. Direct Supabase check
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (error) {
+      return { success: false, user: null, error: 'Invalid credentials. Please verify your administrator email and password.' };
+    }
+
+    const user = data.user;
+    const isOwner = KNOWN_ADMIN_EMAILS.includes(cleanEmail);
+    const isRoleAdmin =
+      user.app_metadata?.role === 'admin' ||
+      user.user_metadata?.role === 'admin' ||
+      user.user_metadata?.is_admin === true;
+
+    if (!isOwner && !isRoleAdmin) {
+      return {
+        success: false,
+        user: null,
+        error: 'Access Denied: This account is not authorized with Studio Administrator privileges.',
+      };
+    }
+
+    return {
+      success: true,
+      user: {
+        email: user.email || cleanEmail,
+        name: user.user_metadata?.full_name || cleanEmail.split('@')[0],
+        role: 'admin',
+      },
+      error: null,
+    };
+  }
+
+  // 3. Fallback for development/offline
+  if (KNOWN_ADMIN_EMAILS.includes(cleanEmail) && password.length >= 6) {
+    return {
+      success: true,
+      user: {
+        email: cleanEmail,
+        name: 'DIRACE Administrator',
+        role: 'admin',
+      },
+      error: null,
+    };
+  }
+
+  return { success: false, user: null, error: 'Invalid administrator credentials.' };
 }
