@@ -2720,7 +2720,7 @@ function Admin() {
   const [adminAuthSubmitting, setAdminAuthSubmitting] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
 
-  // Check existing session or cached credentials on mount
+  // Check existing session on mount - active store accounts MUST NOT grant admin access
   useEffect(() => {
     let isMounted = true;
     async function checkAdminClearance() {
@@ -2738,22 +2738,15 @@ function Admin() {
                 return;
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            sessionStorage.removeItem('dirace_admin_auth_user');
+          }
         }
 
-        const currentUser = await getSupabaseCurrentUser();
-        if (currentUser && currentUser.email) {
-          const isVerified = await verifyUserIsAdmin(currentUser);
-          if (isVerified && isMounted) {
-            const adminObj = {
-              email: currentUser.email,
-              name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
-              role: 'admin',
-            };
-            setAdminUser(adminObj);
-            setIsAdminAuthenticated(true);
-            sessionStorage.setItem('dirace_admin_auth_user', JSON.stringify(adminObj));
-          }
+        // Active customer accounts on the store do NOT grant access to admin
+        if (isMounted) {
+          setIsAdminAuthenticated(false);
+          setAdminUser(null);
         }
       } catch (err) {
         console.warn('Admin clearance verification error:', err);
@@ -3236,7 +3229,7 @@ function Admin() {
               STUDIO ADMIN.
             </h1>
             <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 28 }}>
-              This operational control room manages catalog silhouettes, client orders, and sales records. Please enter your authorized administrator credentials to unlock access.
+              This operational control room is exclusively reserved for the studio administrator. Standard customer and user accounts are strictly barred from this portal.
             </p>
 
             {adminAuthError && (
@@ -3264,14 +3257,14 @@ function Admin() {
               <div className="field">
                 <label htmlFor="admin-email-input" style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Administrator Email</span>
-                  <span className="muted" style={{ textTransform: 'none', fontSize: 10 }}>Authorized administrator</span>
+                  <span className="muted" style={{ textTransform: 'none', fontSize: 10 }}>Fixed admin credentials</span>
                 </label>
                 <input
                   id="admin-email-input"
                   type="email"
                   value={adminEmailInput}
                   onChange={(e) => setAdminEmailInput(e.target.value)}
-                  placeholder="admin@dirace.com"
+                  placeholder="diraceadmin@gmail.com"
                   required
                   autoComplete="email"
                   style={{

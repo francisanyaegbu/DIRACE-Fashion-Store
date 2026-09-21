@@ -22,21 +22,13 @@ const getSupabaseAnon = () => {
   return createClient(url, anonKey);
 };
 
-// Known authorized admin emails
-const KNOWN_ADMIN_EMAILS = [
-  "anyaegbufrancis34@gmail.com",
-];
+// Fixed Studio Administrator credentials
+export const FIXED_ADMIN_EMAIL = "diraceadmin@gmail.com";
+export const FIXED_ADMIN_PASSWORD = "diraceadminonly";
 
 export function isEmailAuthorizedAdmin(email: string): boolean {
   const clean = email.trim().toLowerCase();
-  if (KNOWN_ADMIN_EMAILS.includes(clean)) return true;
-
-  const envAdmins = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  return envAdmins.includes(clean);
+  return clean === FIXED_ADMIN_EMAIL;
 }
 
 /**
@@ -110,8 +102,8 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // If the newly created user is in the known admin list, ensure admin role
-    if (isEmailAuthorizedAdmin(cleanEmail) && data.user) {
+    // If the newly created user matches the fixed admin email, ensure admin role
+    if (cleanEmail === FIXED_ADMIN_EMAIL && data.user) {
       await sbAdmin.auth.admin.updateUserById(data.user.id, {
         app_metadata: { role: "admin" },
         user_metadata: { ...data.user.user_metadata, role: "admin", is_admin: true },
@@ -130,7 +122,7 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
 
 /**
  * POST /api/auth/admin-login
- * Validates admin credentials and ensures only authorized administrators can access the admin area.
+ * Validates admin credentials and ensures only the fixed admin credentials can access the admin area.
  */
 router.post("/admin-login", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -138,91 +130,55 @@ router.post("/admin-login", async (req: Request, res: Response): Promise<void> =
     const cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
     if (!cleanEmail || !password) {
-      res.status(400).json({ error: "Admin email and password are required." });
+      res.status(400).json({ error: "Administrator email and password are required." });
       return;
     }
 
-    // 1. Check if email matches authorized admin list or metadata
-    const isKnownAdmin = isEmailAuthorizedAdmin(cleanEmail);
+    // STRICT ACCESS CONTROL:
+    // Regular user accounts MUST NOT be able to access the admin page at all even with an active account.
+    // It is ONLY available to the admin with the fixed login credentials:
+    // Email: "diraceadmin@gmail.com"
+    // Password: "diraceadminonly"
+    if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+      res.status(403).json({
+        error: "Access Denied: Standard user accounts cannot access the studio administration portal. Only authorized administrator credentials are valid.",
+      });
+      return;
+    }
+
+    if (password !== FIXED_ADMIN_PASSWORD) {
+      res.status(401).json({
+        error: "Invalid administrator credentials. Please check your administrator password.",
+      });
+      return;
+    }
 
     const sbAnon = getSupabaseAnon();
-    const sbAdmin = getSupabaseAdmin();
+    let accessToken: string | undefined;
+    let userId = "admin_fixed";
 
     if (sbAnon) {
-      const { data, error } = await sbAnon.auth.signInWithPassword({
-        email: cleanEmail,
-        password: String(password),
-      });
+      const { data } = await sbAnon.auth.signInWithPassword({
+        email: FIXED_ADMIN_EMAIL,
+        password: FIXED_ADMIN_PASSWORD,
+      }).catch(() => ({ data: null }));
 
-      if (error) {
-        // Fallback check: if environment configured an ADMIN_PASSWORD
-        const customAdminPass = process.env.ADMIN_PASSWORD;
-        if (customAdminPass && password === customAdminPass && isKnownAdmin) {
-          res.json({
-            authorized: true,
-            user: {
-              email: cleanEmail,
-              name: cleanEmail.split("@")[0],
-              role: "admin",
-            },
-          });
-          return;
-        }
-
-        res.status(401).json({ error: "Invalid credentials. Please verify your administrator email and password." });
-        return;
-      }
-
-      const user = data.user;
-      const isRoleAdmin =
-        user.app_metadata?.role === "admin" ||
-        user.user_metadata?.role === "admin" ||
-        user.user_metadata?.is_admin === true;
-
-      if (!isKnownAdmin && !isRoleAdmin) {
-        res.status(403).json({
-          error: "Access Denied: This account does not possess Studio Administrator privileges.",
-        });
-        return;
-      }
-
-      // Ensure admin metadata flag is present for future fast queries
-      if (sbAdmin && user && (!user.app_metadata?.role || user.app_metadata.role !== "admin")) {
-        await sbAdmin.auth.admin.updateUserById(user.id, {
-          app_metadata: { role: "admin" },
-          user_metadata: { ...user.user_metadata, role: "admin", is_admin: true },
-        });
-      }
-
-      res.json({
-        authorized: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Administrator",
-          role: "admin",
-        },
-        session: {
-          access_token: data.session?.access_token,
-        },
-      });
-      return;
+      if (data?.user?.id) userId = data.user.id;
+      if (data?.session?.access_token) accessToken = data.session.access_token;
     }
 
-    // Offline / Local development fallback
-    if (isKnownAdmin && password.length >= 6) {
-      res.json({
-        authorized: true,
-        user: {
-          email: cleanEmail,
-          name: "DIRACE Administrator",
-          role: "admin",
-        },
-      });
-      return;
-    }
-
-    res.status(401).json({ error: "Invalid administrator credentials." });
+    res.json({
+      authorized: true,
+      user: {
+        id: userId,
+        email: FIXED_ADMIN_EMAIL,
+        name: "DIRACE Studio Administrator",
+        role: "admin",
+      },
+      session: {
+        access_token: accessToken,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Failed to authenticate administrator." });
   }
@@ -230,7 +186,7 @@ router.post("/admin-login", async (req: Request, res: Response): Promise<void> =
 
 /**
  * POST /api/auth/admin-verify
- * Verifies if the currently active session is an authorized administrator.
+ * Verifies if the session email is the authorized fixed administrator.
  */
 router.post("/admin-verify", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -242,27 +198,15 @@ router.post("/admin-verify", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (isEmailAuthorizedAdmin(cleanEmail)) {
-      res.json({ authorized: true, email: cleanEmail });
+    if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+      res.status(403).json({
+        authorized: false,
+        error: "Access Denied: Standard user accounts cannot access the administration portal.",
+      });
       return;
     }
 
-    const sbAdmin = getSupabaseAdmin();
-    if (sbAdmin) {
-      const { data } = await sbAdmin.auth.admin.listUsers();
-      const user = (data?.users as any[])?.find((u: any) => u.email?.toLowerCase() === cleanEmail);
-      if (
-        user &&
-        (user.app_metadata?.role === "admin" ||
-          user.user_metadata?.role === "admin" ||
-          user.user_metadata?.is_admin === true)
-      ) {
-        res.json({ authorized: true, email: cleanEmail });
-        return;
-      }
-    }
-
-    res.status(403).json({ authorized: false, error: "Not an authorized administrator." });
+    res.json({ authorized: true, email: FIXED_ADMIN_EMAIL });
   } catch (err: any) {
     res.status(500).json({ authorized: false, error: err?.message || "Verification failed." });
   }

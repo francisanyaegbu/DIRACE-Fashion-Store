@@ -857,29 +857,23 @@ export async function getSupabaseCurrentUser(): Promise<User | null> {
   return null;
 }
 
-export const KNOWN_ADMIN_EMAILS = [
-  'anyaegbufrancis34@gmail.com',
-];
+export const FIXED_ADMIN_EMAIL = 'diraceadmin@gmail.com';
+export const FIXED_ADMIN_PASSWORD = 'diraceadminonly';
+export const KNOWN_ADMIN_EMAILS = [FIXED_ADMIN_EMAIL];
 
 /**
  * Checks if a given user object qualifies for studio administrator privileges.
+ * Users should NOT be able to access the admin page at all even with an active account.
+ * It is ONLY available to the admin with the fixed login credentials:
+ * "diraceadmin@gmail.com" and "diraceadminonly"
  */
 export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
   if (!user || !user.email) return false;
   const cleanEmail = user.email.trim().toLowerCase();
 
-  // Known administrator account
-  if (KNOWN_ADMIN_EMAILS.includes(cleanEmail)) {
-    return true;
-  }
-
-  // Role metadata check
-  if (
-    user.app_metadata?.role === 'admin' ||
-    user.user_metadata?.role === 'admin' ||
-    user.user_metadata?.is_admin === true
-  ) {
-    return true;
+  // Any regular customer or user account is strictly blocked
+  if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+    return false;
   }
 
   // Backend verification check
@@ -897,11 +891,12 @@ export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
     console.warn('Admin verify check failed', e);
   }
 
-  return false;
+  return cleanEmail === FIXED_ADMIN_EMAIL;
 }
 
 /**
  * Authenticates against administrator credentials.
+ * Only the fixed credentials (diraceadmin@gmail.com / diraceadminonly) are accepted.
  */
 export async function adminLogin(
   email: string,
@@ -910,6 +905,23 @@ export async function adminLogin(
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail || !password) {
     return { success: false, user: null, error: 'Please provide both your administrator email and password.' };
+  }
+
+  // Reject non-admin accounts immediately
+  if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+    return {
+      success: false,
+      user: null,
+      error: 'Access Denied: Standard user accounts cannot access the studio administration portal. Only authorized administrator credentials are valid.',
+    };
+  }
+
+  if (password !== FIXED_ADMIN_PASSWORD) {
+    return {
+      success: false,
+      user: null,
+      error: 'Invalid administrator credentials. Please check your administrator password.',
+    };
   }
 
   // 1. Try backend admin login endpoint
@@ -951,43 +963,25 @@ export async function adminLogin(
     }
 
     const user = data.user;
-    const isOwner = KNOWN_ADMIN_EMAILS.includes(cleanEmail);
-    const isRoleAdmin =
-      user.app_metadata?.role === 'admin' ||
-      user.user_metadata?.role === 'admin' ||
-      user.user_metadata?.is_admin === true;
-
-    if (!isOwner && !isRoleAdmin) {
-      return {
-        success: false,
-        user: null,
-        error: 'Access Denied: This account is not authorized with Studio Administrator privileges.',
-      };
-    }
-
     return {
       success: true,
       user: {
         email: user.email || cleanEmail,
-        name: user.user_metadata?.full_name || cleanEmail.split('@')[0],
+        name: user.user_metadata?.full_name || 'DIRACE Studio Administrator',
         role: 'admin',
       },
       error: null,
     };
   }
 
-  // 3. Fallback for development/offline
-  if (KNOWN_ADMIN_EMAILS.includes(cleanEmail) && password.length >= 6) {
-    return {
-      success: true,
-      user: {
-        email: cleanEmail,
-        name: 'DIRACE Administrator',
-        role: 'admin',
-      },
-      error: null,
-    };
-  }
-
-  return { success: false, user: null, error: 'Invalid administrator credentials.' };
+  // 3. Fallback for offline/development
+  return {
+    success: true,
+    user: {
+      email: cleanEmail,
+      name: 'DIRACE Studio Administrator',
+      role: 'admin',
+    },
+    error: null,
+  };
 }
