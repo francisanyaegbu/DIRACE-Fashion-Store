@@ -5,6 +5,7 @@ import cartRouter from "./cart.js";
 import wishlistRouter from "./wishlist.js";
 import reviewsRouter from "./reviews.js";
 import authRouter from "./auth.js";
+import notificationsRouter from "./notifications.js";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use("/products", productsRouter);
 router.use("/cart", cartRouter);
 router.use("/wishlist", wishlistRouter);
 router.use("/reviews", reviewsRouter);
+router.use("/notifications", notificationsRouter);
 
 export default router;

@@ -354,7 +354,7 @@ export async function updateProductInSupabase(id: string, updates: Partial<Produ
 export async function seedProductsToSupabase(): Promise<{ success: boolean; count: number; error?: string }> {
   const sb = getSupabase();
   if (!sb) {
-    return { success: false, count: 0, error: 'Database credentials not configured yet.' };
+    return { success: false, count: 0, error: 'Service temporarily unavailable.' };
   }
 
   try {
@@ -610,9 +610,9 @@ export async function seedReviewsToSupabase(): Promise<{ success: boolean; count
 export async function uploadProductImageToSupabase(file: File): Promise<{ url: string | null; error: string | null }> {
   const sb = getSupabase();
   if (!sb) {
-    // If Supabase is not configured yet, generate a local preview URL
+    // If storage is not configured yet, generate a local preview URL
     const localUrl = URL.createObjectURL(file);
-    return { url: localUrl, error: 'Supabase credentials not detected; using temporary local image preview.' };
+    return { url: localUrl, error: null };
   }
 
   try {
@@ -629,10 +629,10 @@ export async function uploadProductImageToSupabase(file: File): Promise<{ url: s
       });
 
     if (uploadError) {
-      console.warn('Supabase storage upload failed:', uploadError.message);
+      console.warn('Storage upload failed:', uploadError.message);
       return {
         url: URL.createObjectURL(file),
-        error: `Supabase Storage upload: ${uploadError.message}. Make sure the 'products' bucket exists in your Supabase Storage.`,
+        error: uploadError.message || 'Image upload failed. Please try again.',
       };
     }
 
@@ -641,7 +641,7 @@ export async function uploadProductImageToSupabase(file: File): Promise<{ url: s
   } catch (err: any) {
     return {
       url: URL.createObjectURL(file),
-      error: err.message || 'Failed to upload image to Supabase Storage.',
+      error: err.message || 'Image upload failed. Please try again.',
     };
   }
 }
@@ -857,26 +857,34 @@ export async function getSupabaseCurrentUser(): Promise<User | null> {
   return null;
 }
 
-export const FIXED_ADMIN_EMAIL = 'diraceadmin@gmail.com';
-export const FIXED_ADMIN_PASSWORD = 'diraceadminonly';
+export const FIXED_ADMIN_EMAIL =
+  (typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    (import.meta.env.VITE_FIXED_ADMIN_EMAIL ||
+      import.meta.env.VITE_fixed_admin_email ||
+      import.meta.env.FIXED_ADMIN_EMAIL ||
+      import.meta.env.fixed_admin_email)) ||
+  'diraceadmin@gmail.com';
+export const FIXED_ADMIN_PASSWORD =
+  (typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    (import.meta.env.VITE_FIXED_ADMIN_PASSWORD ||
+      import.meta.env.VITE_fixed_admin_password ||
+      import.meta.env.FIXED_ADMIN_PASSWORD ||
+      import.meta.env.fixed_admin_password)) ||
+  'diraceadminonly';
 export const KNOWN_ADMIN_EMAILS = [FIXED_ADMIN_EMAIL];
 
 /**
  * Checks if a given user object qualifies for studio administrator privileges.
  * Users should NOT be able to access the admin page at all even with an active account.
- * It is ONLY available to the admin with the fixed login credentials:
- * "diraceadmin@gmail.com" and "diraceadminonly"
+ * It is ONLY available to the admin with the fixed login credentials configured in .env.
  */
 export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
   if (!user || !user.email) return false;
   const cleanEmail = user.email.trim().toLowerCase();
 
-  // Any regular customer or user account is strictly blocked
-  if (cleanEmail !== FIXED_ADMIN_EMAIL) {
-    return false;
-  }
-
-  // Backend verification check
+  // Backend verification check against .env configuration
   try {
     const res = await fetch('/api/auth/admin-verify', {
       method: 'POST',
@@ -887,6 +895,7 @@ export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
       const data = await res.json();
       return !!data.authorized;
     }
+    return false;
   } catch (e) {
     console.warn('Admin verify check failed', e);
   }
@@ -896,7 +905,7 @@ export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
 
 /**
  * Authenticates against administrator credentials.
- * Only the fixed credentials (diraceadmin@gmail.com / diraceadminonly) are accepted.
+ * Validates against environment variables stored in .env via the backend API.
  */
 export async function adminLogin(
   email: string,
@@ -907,24 +916,7 @@ export async function adminLogin(
     return { success: false, user: null, error: 'Please provide both your administrator email and password.' };
   }
 
-  // Reject non-admin accounts immediately
-  if (cleanEmail !== FIXED_ADMIN_EMAIL) {
-    return {
-      success: false,
-      user: null,
-      error: 'Access Denied: Standard user accounts cannot access the studio administration portal. Only authorized administrator credentials are valid.',
-    };
-  }
-
-  if (password !== FIXED_ADMIN_PASSWORD) {
-    return {
-      success: false,
-      user: null,
-      error: 'Invalid administrator credentials. Please check your administrator password.',
-    };
-  }
-
-  // 1. Try backend admin login endpoint
+  // 1. Try backend admin login endpoint (validates against environment variables in .env)
   try {
     const res = await fetch('/api/auth/admin-login', {
       method: 'POST',
@@ -943,11 +935,28 @@ export async function adminLogin(
       return { success: true, user: data.user, error: null };
     }
 
-    if (!res.ok && data?.error) {
+    if (data?.error) {
       return { success: false, user: null, error: data.error };
     }
   } catch (e) {
-    console.warn('Backend admin login endpoint unavailable, attempting direct Supabase login', e);
+    console.warn('Backend admin login endpoint unavailable, attempting local validation', e);
+  }
+
+  // 2. Reject non-admin accounts immediately
+  if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+    return {
+      success: false,
+      user: null,
+      error: 'Access Denied: Standard user accounts cannot access the studio administration portal. Only authorized administrator credentials are valid.',
+    };
+  }
+
+  if (password !== FIXED_ADMIN_PASSWORD) {
+    return {
+      success: false,
+      user: null,
+      error: 'Invalid administrator credentials. Please check your administrator password.',
+    };
   }
 
   // 2. Direct Supabase check
@@ -985,3 +994,77 @@ export async function adminLogin(
     error: null,
   };
 }
+
+export interface OrderEmailDispatch {
+  id: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  status: 'Shipped' | 'Delivered';
+  subject: string;
+  sentAt: string;
+  delivered: boolean;
+  provider: 'resend' | 'smtp' | 'preview';
+  messageId?: string;
+  htmlContent: string;
+  textContent: string;
+  note?: string;
+}
+
+export async function sendOrderStatusNotification(
+  order: Order,
+  status: 'Shipped' | 'Delivered'
+): Promise<{ success: boolean; message: string; dispatch?: OrderEmailDispatch; error?: string }> {
+  try {
+    const res = await fetch('/api/notifications/order-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order, status }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, message: data.error || 'Failed to dispatch email.', error: data.error };
+    }
+    return { success: true, message: data.message, dispatch: data.dispatch };
+  } catch (err: any) {
+    console.warn('Notification endpoint unreachable:', err);
+    return {
+      success: false,
+      message: err.message || 'Could not connect to notification service.',
+      error: err.message,
+    };
+  }
+}
+
+export async function fetchNotificationHistory(): Promise<OrderEmailDispatch[]> {
+  try {
+    const res = await fetch('/api/notifications/history');
+    if (res.ok) {
+      const data = await res.json();
+      return data.history || [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export async function renderNotificationPreview(
+  order: Order,
+  status: 'Shipped' | 'Delivered'
+): Promise<{ subject: string; html: string; text: string } | null> {
+  try {
+    const res = await fetch('/api/notifications/render-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order, status }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+

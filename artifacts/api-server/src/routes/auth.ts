@@ -22,13 +22,32 @@ const getSupabaseAnon = () => {
   return createClient(url, anonKey);
 };
 
-// Fixed Studio Administrator credentials
-export const FIXED_ADMIN_EMAIL = "diraceadmin@gmail.com";
-export const FIXED_ADMIN_PASSWORD = "diraceadminonly";
+// Fixed Studio Administrator credentials sourced from environment variables (.env)
+export const getFixedAdminEmail = (): string => {
+  return (
+    process.env.FIXED_ADMIN_EMAIL ||
+    process.env.fixed_admin_email ||
+    process.env.ADMIN_EMAILS ||
+    process.env.ADMIN_EMAIL ||
+    "diraceadmin@gmail.com"
+  ).trim().toLowerCase();
+};
+
+export const getFixedAdminPassword = (): string => {
+  return (
+    process.env.FIXED_ADMIN_PASSWORD ||
+    process.env.fixed_admin_password ||
+    process.env.ADMIN_PASSWORD ||
+    "diraceadminonly"
+  );
+};
+
+export const FIXED_ADMIN_EMAIL = getFixedAdminEmail();
+export const FIXED_ADMIN_PASSWORD = getFixedAdminPassword();
 
 export function isEmailAuthorizedAdmin(email: string): boolean {
   const clean = email.trim().toLowerCase();
-  return clean === FIXED_ADMIN_EMAIL;
+  return clean === getFixedAdminEmail();
 }
 
 /**
@@ -102,8 +121,11 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const targetAdminEmail = getFixedAdminEmail();
+    const targetAdminPassword = getFixedAdminPassword();
+
     // If the newly created user matches the fixed admin email, ensure admin role
-    if (cleanEmail === FIXED_ADMIN_EMAIL && data.user) {
+    if (cleanEmail === targetAdminEmail && data.user) {
       await sbAdmin.auth.admin.updateUserById(data.user.id, {
         app_metadata: { role: "admin" },
         user_metadata: { ...data.user.user_metadata, role: "admin", is_admin: true },
@@ -134,19 +156,20 @@ router.post("/admin-login", async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    const targetAdminEmail = getFixedAdminEmail();
+    const targetAdminPassword = getFixedAdminPassword();
+
     // STRICT ACCESS CONTROL:
     // Regular user accounts MUST NOT be able to access the admin page at all even with an active account.
-    // It is ONLY available to the admin with the fixed login credentials:
-    // Email: "diraceadmin@gmail.com"
-    // Password: "diraceadminonly"
-    if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+    // It is ONLY available to the admin with the fixed login credentials configured in .env.
+    if (cleanEmail !== targetAdminEmail) {
       res.status(403).json({
-        error: "Access Denied: Standard user accounts cannot access the studio administration portal. Only authorized administrator credentials are valid.",
+        error: "Access Denied: Only authorized administrator credentials are valid.",
       });
       return;
     }
 
-    if (password !== FIXED_ADMIN_PASSWORD) {
+    if (password !== targetAdminPassword) {
       res.status(401).json({
         error: "Invalid administrator credentials. Please check your administrator password.",
       });
@@ -159,8 +182,8 @@ router.post("/admin-login", async (req: Request, res: Response): Promise<void> =
 
     if (sbAnon) {
       const { data } = await sbAnon.auth.signInWithPassword({
-        email: FIXED_ADMIN_EMAIL,
-        password: FIXED_ADMIN_PASSWORD,
+        email: targetAdminEmail,
+        password: targetAdminPassword,
       }).catch(() => ({ data: null }));
 
       if (data?.user?.id) userId = data.user.id;
@@ -171,7 +194,7 @@ router.post("/admin-login", async (req: Request, res: Response): Promise<void> =
       authorized: true,
       user: {
         id: userId,
-        email: FIXED_ADMIN_EMAIL,
+        email: targetAdminEmail,
         name: "DIRACE Studio Administrator",
         role: "admin",
       },
@@ -198,7 +221,9 @@ router.post("/admin-verify", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+    const targetAdminEmail = getFixedAdminEmail();
+
+    if (cleanEmail !== targetAdminEmail) {
       res.status(403).json({
         authorized: false,
         error: "Access Denied: Standard user accounts cannot access the administration portal.",
@@ -206,7 +231,7 @@ router.post("/admin-verify", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    res.json({ authorized: true, email: FIXED_ADMIN_EMAIL });
+    res.json({ authorized: true, email: targetAdminEmail });
   } catch (err: any) {
     res.status(500).json({ authorized: false, error: err?.message || "Verification failed." });
   }

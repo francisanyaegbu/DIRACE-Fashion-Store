@@ -18,7 +18,6 @@ import {
   X,
   Upload,
   Copy,
-  Database,
   ShieldCheck,
   ShieldAlert,
   Lock,
@@ -41,6 +40,9 @@ import {
   AlertTriangle,
   AlertCircle,
   CheckCircle2,
+  Mail,
+  Send,
+  FileText,
 } from 'lucide-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useRoute } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -60,6 +62,10 @@ import {
   fetchReviewsFromSupabase,
   createReviewInSupabase,
   deleteReviewFromSupabase,
+  sendOrderStatusNotification,
+  fetchNotificationHistory,
+  renderNotificationPreview,
+  type OrderEmailDispatch,
   isSupabaseConfigured,
   supabaseSignUp,
   supabaseSignIn,
@@ -129,6 +135,43 @@ export function money(value: number): string {
   }).format(value);
 }
 
+export function InstagramIcon({ size = 14, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
+
+export function WhatsAppIcon({ size = 14, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M17.472 14.382c-.301-.15-1.78-.879-2.056-.98-.277-.101-.478-.15-.678.15-.201.301-.779.98-.954 1.18-.176.201-.351.226-.652.076-.301-.151-1.27-.468-2.42-1.493-.895-.798-1.5-1.784-1.675-2.085-.175-.301-.019-.464.132-.614.136-.135.301-.351.452-.527.15-.175.201-.301.301-.502.101-.201.05-.376-.025-.526-.075-.151-.678-1.633-.929-2.235-.245-.586-.494-.506-.678-.515-.176-.008-.377-.01-.578-.01-.201 0-.527.075-.803.376-.276.301-1.054 1.03-1.054 2.511 0 1.482 1.079 2.912 1.23 3.113.15.201 2.124 3.242 5.145 4.547.719.31 1.28.497 1.718.636.722.23 1.378.197 1.897.12.578-.087 1.78-.727 2.03-1.43.251-.703.251-1.305.176-1.43-.075-.125-.276-.201-.577-.351z" />
+      <path d="M12 2C6.48 2 2 6.48 2 12c0 1.95.56 3.77 1.53 5.31L2 22l4.82-1.49C8.31 21.46 10.1 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18.2c-1.64 0-3.17-.46-4.48-1.26l-.32-.2-2.86.88.9-2.77-.21-.34A8.17 8.17 0 0 1 3.8 12c0-4.52 3.68-8.2 8.2-8.2s8.2 3.68 8.2 8.2-3.68 8.2-8.2 8.2z" />
+    </svg>
+  );
+}
+
 function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount: number }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -138,6 +181,17 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
     ['About', '/about'],
     ['Contact', '/contact'],
   ];
+
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [menuOpen]);
 
   return (
     <>
@@ -152,11 +206,13 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
             <Menu size={19} strokeWidth={1.5} />
           </button>
           <Link href="/" className="brand-lockup" data-testid="link-logo" aria-label="DIRACE Home">
-            <img
-              src="/diracelogo-removebg-preview.png"
-              alt="DIRACE Logo"
-              className="brand-logo-mark"
-            />
+            <span className="brand-logo-mark-wrap">
+              <img
+                src="/dirace-logo-1-removebg-preview.png"
+                alt="DIRACE Logo"
+                className="brand-logo-mark"
+              />
+            </span>
             <img
               src="/diracename-removebg-preview.png"
               alt="DIRACE"
@@ -196,21 +252,19 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
       {menuOpen && (
         <div
           className="mobile-drawer"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 50,
-            background: 'hsl(var(--background))',
-            padding: '26px 20px',
-          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Site Navigation"
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="mobile-drawer-header">
             <Link href="/" className="brand-lockup" onClick={() => setMenuOpen(false)} aria-label="DIRACE Home">
-              <img
-                src="/diracelogo-removebg-preview.png"
-                alt="DIRACE Logo"
-                className="brand-logo-mark"
-              />
+              <span className="brand-logo-mark-wrap">
+                <img
+                  src="/dirace-logo-1-removebg-preview.png"
+                  alt="DIRACE Logo"
+                  className="brand-logo-mark"
+                />
+              </span>
               <img
                 src="/diracename-removebg-preview.png"
                 alt="DIRACE"
@@ -226,27 +280,73 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
               <X size={20} />
             </button>
           </div>
-          <div style={{ display: 'grid', gap: 22, marginTop: 80 }}>
-            {links.map(([label, href]) => (
+          <div className="mobile-drawer-body">
+            <div className="mobile-primary-links">
+              {links.map(([label, href]) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`mobile-nav-item display ${location === href ? 'active' : ''}`}
+                  onClick={() => setMenuOpen(false)}
+                  data-testid={`mobile-link-${label.toLowerCase()}`}
+                >
+                  {label}
+                </Link>
+              ))}
               <Link
-                key={href}
-                href={href}
-                className="display"
-                style={{ fontSize: 44 }}
+                href="/admin"
+                className="mobile-nav-item display mobile-admin-link"
                 onClick={() => setMenuOpen(false)}
-                data-testid={`mobile-link-${label.toLowerCase()}`}
               >
-                {label}
+                Studio Admin
               </Link>
-            ))}
-            <Link
-              href="/admin"
-              className="display"
-              style={{ fontSize: 34, color: 'hsl(var(--muted-foreground))' }}
-              onClick={() => setMenuOpen(false)}
-            >
-              Studio Admin
-            </Link>
+            </div>
+
+            <div className="mobile-drawer-shortcuts">
+              <div className="eyebrow muted" style={{ marginBottom: 10 }}>Personal & Bag</div>
+              <div className="mobile-shortcuts-grid">
+                <Link href="/search" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
+                  <Search size={15} />
+                  <span>Search</span>
+                </Link>
+                <Link href="/account" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
+                  <UserRound size={15} />
+                  <span>Account</span>
+                </Link>
+                <Link href="/wishlist" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
+                  <Heart size={15} />
+                  <span>Wishlist {wishlistCount > 0 ? `(${wishlistCount})` : ''}</span>
+                </Link>
+                <Link href="/cart" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
+                  <ShoppingBag size={15} />
+                  <span>Bag {cartCount > 0 ? `(${cartCount})` : ''}</span>
+                </Link>
+              </div>
+            </div>
+
+            <div className="mobile-drawer-footer mono muted">
+              <div>PRICING IN NGN (₦) · LAGOS / ABUJA, NIGERIA</div>
+              <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
+                <a
+                  href="https://www.instagram.com/dirace_?stkn=djRpbnhoamh2bWJh&utm_source=qr"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="footer-social-link"
+                >
+                  <InstagramIcon size={14} />
+                  <span>@dirace_</span>
+                </a>
+                <a
+                  href="https://wa.me/2349136660187"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="footer-social-link"
+                >
+                  <WhatsAppIcon size={14} />
+                  <span>WhatsApp</span>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -261,11 +361,13 @@ function Footer() {
         <div className="footer-grid">
           <div>
             <Link href="/" className="brand-lockup footer-brand" aria-label="DIRACE Home" data-testid="link-footer-logo">
-              <img
-                src="/diracelogo-removebg-preview.png"
-                alt="DIRACE Logo"
-                className="brand-logo-mark"
-              />
+              <span className="brand-logo-mark-wrap">
+                <img
+                  src="/dirace-logo-1-removebg-preview.png"
+                  alt="DIRACE Logo"
+                  className="brand-logo-mark"
+                />
+              </span>
               <img
                 src="/diracename-removebg-preview.png"
                 alt="DIRACE"
@@ -273,7 +375,7 @@ function Footer() {
               />
             </Link>
             <p className="muted" style={{ maxWidth: 220, fontSize: 12, lineHeight: 1.7, marginTop: 18 }}>
-              Clothing for the considered life. Designed in London.
+              Clothing for the considered life. Designed in Nigeria.
             </p>
           </div>
           <div>
@@ -295,16 +397,29 @@ function Footer() {
             </div>
           </div>
           <div>
-            <div className="footer-title">Social</div>
+            <div className="footer-title">Connect</div>
             <div className="footer-links">
-              <a href="https://www.instagram.com" target="_blank" rel="noreferrer">
-                Instagram <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} />
+              <a
+                href="https://www.instagram.com/dirace_?stkn=djRpbnhoamh2bWJh&utm_source=qr"
+                target="_blank"
+                rel="noreferrer"
+                className="footer-social-link"
+                data-testid="link-footer-instagram"
+              >
+                <InstagramIcon size={14} className="footer-social-icon" />
+                <span>Instagram</span>
+                <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
               </a>
-              <a href="https://www.pinterest.com" target="_blank" rel="noreferrer">
-                Pinterest <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} />
-              </a>
-              <a href="mailto:studio@dirace.com">
-                Email us <ArrowUpRight size={12} style={{ verticalAlign: 'middle' }} />
+              <a
+                href="https://wa.me/2349136660187"
+                target="_blank"
+                rel="noreferrer"
+                className="footer-social-link"
+                data-testid="link-footer-whatsapp"
+              >
+                <WhatsAppIcon size={14} className="footer-social-icon" />
+                <span>WhatsApp (+234 913 666 0187)</span>
+                <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
               </a>
             </div>
           </div>
@@ -647,8 +762,8 @@ function QuickViewModal({
 }
 
 function CatalogNotice({
-  title = 'Catalog loading.',
-  copy = 'Loading items from the database.',
+  title = 'Curating collection.',
+  copy = 'Preparing the latest pieces for your selection.',
 }: {
   title?: string;
   copy?: string;
@@ -915,7 +1030,7 @@ function Shop({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
           ))}
         </div>
       ) : (
-        <CatalogNotice title="No products loaded." copy="Your inventory will appear here once connected." />
+        <CatalogNotice title="No pieces found." copy="No garments match your selected criteria. Try adjusting your filters or search." />
       )}
     </main>
   );
@@ -1236,19 +1351,13 @@ function ProductDetail({
         </div>
 
         {loadingRecommended ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-              gap: 24,
-            }}
-          >
+          <div className="product-grid">
             {[1, 2, 3, 4].map((n) => (
               <div
                 key={n}
                 style={{
                   background: 'hsl(0 0% 94%)',
-                  height: 380,
+                  aspectRatio: '.78',
                   animation: 'pulse 1.8s ease-in-out infinite',
                 }}
               />
@@ -1257,11 +1366,6 @@ function ProductDetail({
         ) : recommended.length > 0 ? (
           <div
             className="product-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: '32px 18px',
-            }}
             data-testid="recommended-products-grid"
           >
             {recommended.map((item) => (
@@ -1321,18 +1425,8 @@ function ProductDetail({
         </div>
 
         {/* Overall Score + Distribution */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 32,
-            background: 'hsl(0 0% 96%)',
-            padding: '28px 32px',
-            border: '1px solid hsl(var(--border))',
-            marginBottom: 48,
-          }}
-        >
-          <div style={{ borderRight: '1px solid hsl(var(--border))', paddingRight: 24 }}>
+        <div className="review-stats-card">
+          <div className="review-score-summary">
             <div className="eyebrow muted">Overall rating</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 0 6px' }}>
               <span className="display" style={{ fontSize: 52, lineHeight: 1 }}>
@@ -1388,15 +1482,9 @@ function ProductDetail({
         </div>
 
         {/* REVIEW SUBMISSION SECTION */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 40, alignItems: 'start' }}>
+        <div className="review-submission-layout">
           {/* Form on left (or card) */}
-          <div
-            style={{
-              border: '1px solid hsl(var(--border))',
-              padding: 28,
-              background: 'hsl(var(--background))',
-            }}
-          >
+          <div className="review-form-box">
             <div className="eyebrow accent" style={{ marginBottom: 6 }}>
               Step 01 / Write a Review
             </div>
@@ -1857,7 +1945,7 @@ function About() {
               authorship — an external language for an internal point of view.
             </p>
             <p>
-              Based in London and made in small, deliberate runs, each piece is designed to stay in rotation. We choose cloth
+              Based in Nigeria and made in small, deliberate runs, each piece is designed to stay in rotation. We choose cloth
               for its hand, construction for its longevity, and proportion for the room it gives you.
             </p>
             <p>We are not interested in basics. We are interested in the things you reach for when you know exactly who you are.</p>
@@ -1871,7 +1959,7 @@ function About() {
             filter: 'saturate(.5)',
           }}
         />
-        <div style={{ marginTop: 90, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 50 }}>
+        <div className="about-columns" style={{ marginTop: 80 }}>
           <div>
             <div className="eyebrow accent">01 — Materials</div>
             <p className="muted" style={{ lineHeight: 1.8, fontSize: 13 }}>
@@ -1922,12 +2010,32 @@ function Contact() {
               For questions about an order, a piece, or anything else on your mind.
             </p>
             <div className="footer-links" style={{ marginTop: 40 }}>
+              <a
+                href="https://wa.me/2349136660187"
+                target="_blank"
+                rel="noreferrer"
+                className="footer-social-link"
+              >
+                <WhatsAppIcon size={14} className="footer-social-icon" />
+                <span>WhatsApp: +234 913 666 0187</span>
+                <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
+              </a>
+              <a
+                href="https://www.instagram.com/dirace_?stkn=djRpbnhoamh2bWJh&utm_source=qr"
+                target="_blank"
+                rel="noreferrer"
+                className="footer-social-link"
+              >
+                <InstagramIcon size={14} className="footer-social-icon" />
+                <span>Instagram: @dirace_</span>
+                <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
+              </a>
               <a href="mailto:studio@dirace.com">studio@dirace.com</a>
-              <span>Mon–Fri / 09:00–18:00 GMT</span>
+              <span>Mon–Fri / 09:00–18:00 WAT</span>
               <span>
-                14 Redchurch Street
+                Victoria Island
                 <br />
-                London E2 7DD
+                Lagos, Nigeria
               </span>
             </div>
           </div>
@@ -2291,24 +2399,24 @@ function Checkout({ items }: { items: CartItem[] }) {
               required
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="14 Redchurch Street"
+              placeholder="Admiralty Way, Lekki Phase 1"
               data-testid="input-checkout-address"
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div className="form-two-col">
             <div className="field">
-              <label htmlFor="checkout-city">City</label>
+              <label htmlFor="checkout-city">City / State</label>
               <input
                 id="checkout-city"
                 required
                 value={form.city}
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
-                placeholder="Lagos / London"
+                placeholder="Lagos, Nigeria"
                 data-testid="input-checkout-city"
               />
             </div>
             <div className="field">
-              <label htmlFor="checkout-postcode">Postcode / ZIP</label>
+              <label htmlFor="checkout-postcode">Postal Code</label>
               <input
                 id="checkout-postcode"
                 required
@@ -2850,6 +2958,39 @@ function Admin() {
   const [inspectedOrder, setInspectedOrder] = useState<Order | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
+  // Automated Email Notification States
+  const [notificationHistory, setNotificationHistory] = useState<OrderEmailDispatch[]>([]);
+  const [showNotificationHistory, setShowNotificationHistory] = useState(false);
+  const [previewEmail, setPreviewEmail] = useState<
+    | OrderEmailDispatch
+    | {
+        id: string;
+        orderId: string;
+        customerName: string;
+        customerEmail: string;
+        status: 'Shipped' | 'Delivered' | string;
+        subject: string;
+        sentAt?: string;
+        delivered: boolean;
+        provider: 'resend' | 'smtp' | 'preview';
+        htmlContent: string;
+        textContent: string;
+        note?: string;
+      }
+    | null
+  >(null);
+  const [previewTab, setPreviewTab] = useState<'html' | 'text'>('html');
+  const [notificationFeedback, setNotificationFeedback] = useState<{
+    type: 'success' | 'info' | 'warning';
+    message: string;
+    dispatch?: OrderEmailDispatch;
+  } | null>(null);
+  const [isSendingManualEmail, setIsSendingManualEmail] = useState(false);
+
+  useEffect(() => {
+    fetchNotificationHistory().then(setNotificationHistory).catch(() => {});
+  }, []);
+
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
   // Stock Analysis
@@ -2932,7 +3073,7 @@ function Admin() {
       setNewPiece((prev) => ({ ...prev, image: res.url! }));
       setUploadFeedback('Image uploaded successfully!');
     } else {
-      setUploadFeedback(`Storage error: ${res.error}`);
+      setUploadFeedback(res.error || 'Unable to upload image. Please try again.');
     }
     setIsUploading(false);
   };
@@ -2949,7 +3090,7 @@ function Admin() {
       setEditForm((prev) => ({ ...prev, image: res.url! }));
       setEditUploadFeedback('Image updated successfully!');
     } else {
-      setEditUploadFeedback(`Upload error: ${res.error}`);
+      setEditUploadFeedback(res.error || 'Unable to update image. Please try again.');
     }
     setIsEditUploading(false);
   };
@@ -3080,8 +3221,83 @@ function Admin() {
         setInspectedOrder({ ...inspectedOrder, status });
       }
       await refreshOrders();
+
+      // Automatically send an email to the client when the status is updated to 'Shipped' or 'Delivered'
+      if (status === 'Shipped' || status === 'Delivered') {
+        const targetOrder =
+          orders.find((o) => o.id === orderId) ||
+          (inspectedOrder && inspectedOrder.id === orderId ? inspectedOrder : null);
+
+        if (targetOrder) {
+          const updatedTargetOrder = { ...targetOrder, status };
+          const notifyResult = await sendOrderStatusNotification(updatedTargetOrder, status);
+          if (notifyResult.success && notifyResult.dispatch) {
+            const disp = notifyResult.dispatch;
+            setNotificationFeedback({
+              type: disp.delivered ? 'success' : 'info',
+              message: disp.delivered
+                ? `Automated email dispatched to ${disp.customerEmail} (${status}).`
+                : `Automated ${status} notification composed for ${disp.customerEmail} and archived.`,
+              dispatch: disp,
+            });
+          } else {
+            setNotificationFeedback({
+              type: 'warning',
+              message: notifyResult.error || `Client email notification queued for Order #${orderId}.`,
+            });
+          }
+          fetchNotificationHistory().then(setNotificationHistory).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      console.error('Status change error:', err);
     } finally {
       setUpdatingStatusId(null);
+    }
+  };
+
+  const handlePreviewClientEmail = async (order: Order, status: 'Shipped' | 'Delivered') => {
+    const preview = await renderNotificationPreview(order, status);
+    if (preview) {
+      setPreviewEmail({
+        id: `prev_${order.id}`,
+        orderId: order.id,
+        customerName: order.customer_name,
+        customerEmail: order.customer_email,
+        status,
+        subject: preview.subject,
+        sentAt: new Date().toISOString(),
+        delivered: false,
+        provider: 'preview',
+        htmlContent: preview.html,
+        textContent: preview.text,
+      });
+      setPreviewTab('html');
+    }
+  };
+
+  const handleSendClientEmailManual = async (order: Order, status: 'Shipped' | 'Delivered') => {
+    setIsSendingManualEmail(true);
+    try {
+      const res = await sendOrderStatusNotification(order, status);
+      if (res.success && res.dispatch) {
+        setNotificationFeedback({
+          type: res.dispatch.delivered ? 'success' : 'info',
+          message: res.dispatch.delivered
+            ? `Client email dispatched to ${res.dispatch.customerEmail} (${status}).`
+            : `Client notification composed and recorded for ${res.dispatch.customerEmail}.`,
+          dispatch: res.dispatch,
+        });
+        const history = await fetchNotificationHistory();
+        setNotificationHistory(history);
+      } else {
+        setNotificationFeedback({
+          type: 'warning',
+          message: res.error || 'Failed to dispatch email.',
+        });
+      }
+    } finally {
+      setIsSendingManualEmail(false);
     }
   };
 
@@ -4157,6 +4373,9 @@ function Admin() {
           )}
 
           {/* Products Table */}
+          <div className="table-scroll-hint mono muted">
+            <ArrowRight size={11} /> Swipe table horizontally to inspect all columns
+          </div>
           <div className="table-overflow">
             <table className="admin-table">
               <thead>
@@ -4484,8 +4703,119 @@ function Admin() {
                 <RefreshCw size={14} className={refreshingOrders ? 'animate-spin' : ''} />{' '}
                 {refreshingOrders ? 'Refreshing...' : 'Refresh'}
               </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setShowNotificationHistory(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                title="Inspect automated client email dispatch logs"
+              >
+                <Mail size={14} /> Email Logs ({notificationHistory.length})
+              </button>
             </div>
           </div>
+
+          {/* Automated Client Email Notice Banner */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 16px',
+              background: 'hsl(0 0% 97%)',
+              border: '1px solid hsl(var(--border))',
+              marginBottom: 16,
+              fontSize: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'hsl(142 70% 45%)',
+                }}
+              />
+              <span>
+                <strong>Automated Client Emailing Active:</strong> Changing any order to <em>'Shipped'</em> or <em>'Delivered'</em> automatically composes and dispatches a notification to the client's email.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => setShowNotificationHistory(true)}
+              style={{ fontSize: 11, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <Mail size={12} /> View Logs ({notificationHistory.length})
+            </button>
+          </div>
+
+          {/* Real-time Email Dispatch Feedback Banner */}
+          {notificationFeedback && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                marginBottom: 16,
+                fontSize: 12,
+                background:
+                  notificationFeedback.type === 'success'
+                    ? 'hsl(142 60% 40% / 0.12)'
+                    : notificationFeedback.type === 'warning'
+                    ? 'hsl(45 90% 45% / 0.12)'
+                    : 'hsl(215 70% 50% / 0.12)',
+                border: `1px solid ${
+                  notificationFeedback.type === 'success'
+                    ? 'hsl(142 60% 35% / 0.35)'
+                    : notificationFeedback.type === 'warning'
+                    ? 'hsl(45 90% 45% / 0.35)'
+                    : 'hsl(215 70% 50% / 0.35)'
+                }`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {notificationFeedback.type === 'success' ? (
+                  <CheckCircle2 size={16} style={{ color: 'hsl(142 60% 35%)' }} />
+                ) : (
+                  <Mail size={16} />
+                )}
+                <span>{notificationFeedback.message}</span>
+                {notificationFeedback.dispatch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewEmail(notificationFeedback.dispatch!);
+                      setPreviewTab('html');
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 0,
+                      color: 'inherit',
+                      textDecoration: 'underline',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      padding: 0,
+                    }}
+                  >
+                    View Dispatched Email
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setNotificationFeedback(null)}
+                style={{ background: 'none', border: 0, cursor: 'pointer', padding: 2 }}
+                aria-label="Dismiss feedback"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {/* Search & Status Filter Controls */}
           <div
@@ -4717,6 +5047,78 @@ function Admin() {
                     </button>
                   </div>
 
+                  {/* Automated Client Email Notification Card */}
+                  <div
+                    style={{
+                      marginTop: 14,
+                      padding: '12px 14px',
+                      background: 'hsl(0 0% 96%)',
+                      border: '1px solid hsl(var(--border))',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600 }} className="mono">
+                        <Mail size={13} className="accent" /> Client Email Notification
+                      </div>
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 10,
+                          padding: '2px 6px',
+                          background:
+                            inspectedOrder.status === 'Shipped' || inspectedOrder.status === 'Delivered'
+                              ? 'hsl(142 60% 40% / 0.15)'
+                              : 'hsl(0 0% 90%)',
+                          color:
+                            inspectedOrder.status === 'Shipped' || inspectedOrder.status === 'Delivered'
+                              ? 'hsl(142 60% 30%)'
+                              : 'hsl(0 0% 40%)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {inspectedOrder.status === 'Shipped' || inspectedOrder.status === 'Delivered'
+                          ? 'Automated Trigger Ready'
+                          : 'Pending Shipped / Delivered'}
+                      </span>
+                    </div>
+                    <p className="muted" style={{ fontSize: 11, lineHeight: 1.5, margin: 0 }}>
+                      {inspectedOrder.status === 'Shipped' || inspectedOrder.status === 'Delivered'
+                        ? `Setting status to '${inspectedOrder.status}' automatically dispatched an email to ${inspectedOrder.customer_email}.`
+                        : `Updating this order to 'Shipped' or 'Delivered' automatically sends an email to ${inspectedOrder.customer_email}.`}
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: 10, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        onClick={() =>
+                          handlePreviewClientEmail(
+                            inspectedOrder,
+                            inspectedOrder.status === 'Delivered' ? 'Delivered' : 'Shipped'
+                          )
+                        }
+                      >
+                        <Eye size={11} /> Preview Client Email
+                      </button>
+                      {(inspectedOrder.status === 'Shipped' || inspectedOrder.status === 'Delivered') && (
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          disabled={isSendingManualEmail}
+                          style={{ fontSize: 10, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          onClick={() =>
+                            handleSendClientEmailManual(
+                              inspectedOrder,
+                              inspectedOrder.status as 'Shipped' | 'Delivered'
+                            )
+                          }
+                        >
+                          <Send size={11} /> {isSendingManualEmail ? 'Sending...' : 'Resend Email'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="rule" style={{ margin: '16px 0' }} />
 
                   <button
@@ -4796,8 +5198,12 @@ function Admin() {
               <p>When clients complete checkout, their order is captured and listed here.</p>
             </div>
           ) : (
-            <div className="table-overflow">
-              <table className="admin-table">
+            <>
+              <div className="table-scroll-hint mono muted">
+                <ArrowRight size={11} /> Swipe table horizontally to inspect all columns
+              </div>
+              <div className="table-overflow">
+                <table className="admin-table">
                 <thead>
                   <tr>
                     <th>Order ID</th>
@@ -4884,6 +5290,21 @@ function Admin() {
                             <button
                               type="button"
                               className="icon-btn"
+                              onClick={() =>
+                                handlePreviewClientEmail(o, o.status === 'Delivered' ? 'Delivered' : 'Shipped')
+                              }
+                              title={
+                                o.status === 'Shipped' || o.status === 'Delivered'
+                                  ? `View automated ${o.status} email sent to client`
+                                  : `Preview automated client email (sent upon Shipped/Delivered)`
+                              }
+                              aria-label={`Email preview for ${o.id}`}
+                            >
+                              <Mail size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
                               onClick={() => setDeleteConfirm({ type: 'order', id: o.id, name: `Order ${o.id}` })}
                               title="Delete order record"
                               aria-label={`Delete ${o.id}`}
@@ -4898,7 +5319,8 @@ function Admin() {
                 </tbody>
               </table>
             </div>
-          )}
+          </>
+        )}
         </section>
       )}
 
@@ -5048,7 +5470,10 @@ function Admin() {
             </div>
           </div>
 
-          <div className="admin-table-wrap">
+          <div className="table-scroll-hint mono muted">
+            <ArrowRight size={11} /> Swipe table horizontally to inspect all columns
+          </div>
+          <div className="table-overflow">
             <table className="admin-table">
               <thead>
                 <tr>
