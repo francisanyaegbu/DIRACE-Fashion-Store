@@ -182,10 +182,10 @@ export function buildOrderStatusEmail(order: OrderNotificationPayload, status: '
           <tr>
             <td style="padding: 28px 36px; text-align: center;">
               <p style="margin: 0; font-size: 12px; color: #827c75;">
-                DIRACE Atelier & Studio · Victoria Island, Lagos, Nigeria
+                DIRACE Atelier & Studio · Lagos & Abuja, Nigeria
               </p>
               <p style="margin: 6px 0 0; font-family: monospace; font-size: 11px; color: #9c968f;">
-                Direct inquiries: <a href="mailto:studio@dirace.com" style="color: #1a1918; text-decoration: underline;">studio@dirace.com</a>
+                Direct inquiries via WhatsApp: +234 913 666 0187 · Instagram: @dirace_
               </p>
             </td>
           </tr>
@@ -199,7 +199,7 @@ export function buildOrderStatusEmail(order: OrderNotificationPayload, status: '
   `.trim();
 
   const text = `
-DIRACE STUDIO — LAGOS, NIGERIA
+DIRACE STUDIO — LAGOS & ABUJA, NIGERIA
 =======================================
 ${subject.toUpperCase()}
 
@@ -207,7 +207,7 @@ Dear ${clientName},
 
 ${
   isShipped
-    ? `Your order #${order.id} has been carefully tailored, inspected, and dispatched from our Lagos studio for courier delivery.`
+    ? `Your order #${order.id} has been carefully tailored, inspected, and dispatched from our studio for courier delivery.`
     : `Your order #${order.id} has been delivered to your destination.`
 }
 
@@ -225,8 +225,8 @@ ${
     : 'We invite you to share your reflection on your piece in the DIRACE client archive.'
 }
 
-Need assistance? Contact studio@dirace.com.
-DIRACE Studio · Victoria Island, Lagos, Nigeria
+WhatsApp: +234 913 666 0187 · Instagram: @dirace_
+DIRACE Studio · Lagos & Abuja, Nigeria
   `.trim();
 
   return { subject, html, text };

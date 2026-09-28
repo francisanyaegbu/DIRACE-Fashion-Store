@@ -101,6 +101,10 @@ interface StoreContextType {
   closeQuickView: () => void;
   addToCart: (productId: string, size: string) => void;
   clearCart: () => void;
+  authModalOpen: boolean;
+  authModalMessage: string;
+  openAuthModal: (message?: string, onSuccess?: () => void) => void;
+  closeAuthModal: () => void;
 }
 
 const StoreContext = createContext<StoreContextType>({
@@ -121,6 +125,10 @@ const StoreContext = createContext<StoreContextType>({
   closeQuickView: () => {},
   addToCart: () => {},
   clearCart: () => {},
+  authModalOpen: false,
+  authModalMessage: '',
+  openAuthModal: () => {},
+  closeAuthModal: () => {},
 });
 
 export function useStore() {
@@ -206,13 +214,6 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
             <Menu size={19} strokeWidth={1.5} />
           </button>
           <Link href="/" className="brand-lockup" data-testid="link-logo" aria-label="DIRACE Home">
-            <span className="brand-logo-mark-wrap">
-              <img
-                src="/dirace-logo-1-removebg-preview.png"
-                alt="DIRACE Logo"
-                className="brand-logo-mark"
-              />
-            </span>
             <img
               src="/diracename-removebg-preview.png"
               alt="DIRACE"
@@ -258,13 +259,6 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
         >
           <div className="mobile-drawer-header">
             <Link href="/" className="brand-lockup" onClick={() => setMenuOpen(false)} aria-label="DIRACE Home">
-              <span className="brand-logo-mark-wrap">
-                <img
-                  src="/dirace-logo-1-removebg-preview.png"
-                  alt="DIRACE Logo"
-                  className="brand-logo-mark"
-                />
-              </span>
               <img
                 src="/diracename-removebg-preview.png"
                 alt="DIRACE"
@@ -361,13 +355,6 @@ function Footer() {
         <div className="footer-grid">
           <div>
             <Link href="/" className="brand-lockup footer-brand" aria-label="DIRACE Home" data-testid="link-footer-logo">
-              <span className="brand-logo-mark-wrap">
-                <img
-                  src="/dirace-logo-1-removebg-preview.png"
-                  alt="DIRACE Logo"
-                  className="brand-logo-mark"
-                />
-              </span>
               <img
                 src="/diracename-removebg-preview.png"
                 alt="DIRACE"
@@ -430,6 +417,283 @@ function Footer() {
         </div>
       </div>
     </footer>
+  );
+}
+
+function AuthModal({
+  isOpen,
+  message,
+  onClose,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  message?: string;
+  onClose: () => void;
+  onSuccess?: () => void;
+}) {
+  const { refreshUser } = useStore();
+  const [mode, setMode] = useState<'signup' | 'signin'>('signup');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      document.body.style.overflow = '';
+      return;
+    }
+    setError(null);
+    setPassword('');
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (mode === 'signup') {
+        const res = await supabaseSignUp(email, password, fullName);
+        if (res.error) {
+          setError(res.error);
+        } else {
+          await refreshUser();
+          onClose();
+          if (onSuccess) onSuccess();
+        }
+      } else {
+        const res = await supabaseSignIn(email, password);
+        if (res.error) {
+          setError(res.error);
+        } else {
+          await refreshUser();
+          onClose();
+          if (onSuccess) onSuccess();
+        }
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Authentication error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="auth-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Account Authentication Required"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="auth-modal-card" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="quick-view-close"
+          onClick={onClose}
+          aria-label="Close authentication modal"
+          data-testid="button-close-auth-modal"
+        >
+          <X size={18} />
+        </button>
+
+        <div style={{ textAlign: 'left' }}>
+          <div className="eyebrow accent" style={{ marginBottom: 6 }}>
+            DIRACE / Client Authentication
+          </div>
+          <h2 className="display" style={{ fontSize: 24, margin: '0 0 8px' }}>
+            {mode === 'signup' ? 'CREATE AN ACCOUNT' : 'CLIENT SIGN IN'}
+          </h2>
+          <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 20px' }}>
+            {message ||
+              (mode === 'signup'
+                ? 'Create a client account to add pieces to your bag, save favorites, and access the DIRACE universe.'
+                : 'Sign in to access your personal space, saved pieces, and bag.')}
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: 16,
+            borderBottom: '1px solid hsl(var(--border))',
+            paddingBottom: 10,
+            marginBottom: 20,
+          }}
+        >
+          <button
+            type="button"
+            className={`mono ${mode === 'signup' ? 'accent' : 'muted'}`}
+            style={{
+              background: 'none',
+              border: 0,
+              cursor: 'pointer',
+              fontWeight: mode === 'signup' ? 700 : 400,
+              fontSize: 12,
+              padding: 0,
+            }}
+            onClick={() => {
+              setMode('signup');
+              setError(null);
+            }}
+          >
+            01 / Create Account
+          </button>
+          <button
+            type="button"
+            className={`mono ${mode === 'signin' ? 'accent' : 'muted'}`}
+            style={{
+              background: 'none',
+              border: 0,
+              cursor: 'pointer',
+              fontWeight: mode === 'signin' ? 700 : 400,
+              fontSize: 12,
+              padding: 0,
+            }}
+            onClick={() => {
+              setMode('signin');
+              setError(null);
+            }}
+          >
+            02 / Sign In
+          </button>
+        </div>
+
+        {error && (
+          <div
+            style={{
+              background: 'hsl(0 85% 96%)',
+              border: '1px solid hsl(0 85% 85%)',
+              color: 'hsl(0 75% 35%)',
+              padding: '10px 14px',
+              fontSize: 12,
+              marginBottom: 18,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
+          {mode === 'signup' && (
+            <div>
+              <label className="mono muted" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>
+                Full Name
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Tunde Balogun"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: 42,
+                  padding: '0 12px',
+                  background: 'hsl(0 0% 97%)',
+                  border: '1px solid hsl(var(--border))',
+                  fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="mono muted" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>
+              Email Address *
+            </label>
+            <input
+              type="email"
+              required
+              placeholder="client@dirace.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{
+                width: '100%',
+                height: 42,
+                padding: '0 12px',
+                background: 'hsl(0 0% 97%)',
+                border: '1px solid hsl(var(--border))',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="mono muted" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>
+              Password *
+            </label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              placeholder="Minimum 6 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{
+                width: '100%',
+                height: 42,
+                padding: '0 12px',
+                background: 'hsl(0 0% 97%)',
+                border: '1px solid hsl(var(--border))',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="primary-btn"
+            style={{ width: '100%', height: 46, marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span>Authenticating...</span>
+                <Loader2 size={16} className="animate-spin" />
+              </>
+            ) : mode === 'signup' ? (
+              <>
+                <span>Create Account & Continue</span>
+                <ArrowRight size={14} />
+              </>
+            ) : (
+              <>
+                <span>Sign In & Continue</span>
+                <ArrowRight size={14} />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 11 }} className="mono muted">
+          DIRACE CLIENT PORTAL · SECURE & ENCRYPTED
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -516,7 +780,7 @@ function QuickViewModal({
   wishlist: string[];
   onToggleWish: (id: string) => void;
 }) {
-  const { quickViewProduct, closeQuickView, addToCart, reviews } = useStore();
+  const { quickViewProduct, closeQuickView, addToCart, reviews, currentUser, openAuthModal } = useStore();
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [isAdding, setIsAdding] = useState(false);
   const [added, setAdded] = useState(false);
@@ -554,6 +818,12 @@ function QuickViewModal({
       : null;
 
   const handleAdd = () => {
+    if (!currentUser) {
+      openAuthModal('Create an account or sign in to add pieces to your bag.', () => {
+        addToCart(quickViewProduct.id, selectedSize || quickViewProduct.sizes?.[0] || 'M');
+      });
+      return;
+    }
     setIsAdding(true);
     setTimeout(() => {
       addToCart(quickViewProduct.id, selectedSize || quickViewProduct.sizes?.[0] || 'M');
@@ -1045,7 +1315,7 @@ function ProductDetail({
   onToggleWish: (id: string) => void;
   onAdd: (id: string, size: string) => void;
 }) {
-  const { products, reviews, addReview, deleteReview, currentUser, refreshUser } = useStore();
+  const { products, reviews, addReview, deleteReview, currentUser, refreshUser, openAuthModal } = useStore();
   const [, params] = useRoute('/product/:id');
   const product = products.find((item) => item.id === params?.id);
   const [size, setSize] = useState('');
@@ -1120,6 +1390,12 @@ function ProductDetail({
 
   const selectedSize = size || (product.sizes && product.sizes[0]) || 'M';
   const add = () => {
+    if (!currentUser) {
+      openAuthModal('Create an account or sign in to add pieces to your bag.', () => {
+        onAdd(product.id, selectedSize);
+      });
+      return;
+    }
     setIsAdding(true);
     window.setTimeout(() => {
       onAdd(product.id, selectedSize);
@@ -1132,10 +1408,7 @@ function ProductDetail({
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
-      setReviewFeedback({
-        type: 'error',
-        message: 'Authentication required. Please sign in to leave a review.',
-      });
+      openAuthModal('Create an account or sign in to contribute reflections and reviews.');
       return;
     }
     if (!comment.trim()) {
@@ -1924,9 +2197,9 @@ function About() {
       <div className="page-header">
         <div className="eyebrow accent">DIRACE / About</div>
         <h1 className="display">
-          WE MAKE
+          DIRACE —
           <br />
-          THE MARK.
+          DIFFERENT RACE
         </h1>
       </div>
       <div className="content-narrow">
@@ -1941,14 +2214,17 @@ function About() {
           </div>
           <div>
             <p>
-              DIRACE began with a simple refusal: to make clothes that disappear. We believe what you wear can be an act of
-              authorship — an external language for an internal point of view.
+              DIRACE is a clothing brand built on individuality, self-acceptance, and authentic self-expression.
             </p>
             <p>
-              Based in Nigeria and made in small, deliberate runs, each piece is designed to stay in rotation. We choose cloth
-              for its hand, construction for its longevity, and proportion for the room it gives you.
+              Derived from “Different Race,” DIRACE represents those who embrace their own identity and choose to live by their own character. It’s about accepting who you are, owning your differences, and expressing your identity through what you wear.
             </p>
-            <p>We are not interested in basics. We are interested in the things you reach for when you know exactly who you are.</p>
+            <p>
+              DIRACE isn’t just clothing. It’s a mindset, an identity, and a way of life.
+            </p>
+            <p style={{ fontWeight: 700, letterSpacing: '0.08em', marginTop: 24, fontSize: '1.15rem' }}>
+              DIRACE IS LAW.
+            </p>
           </div>
         </div>
         <div
@@ -2030,12 +2306,11 @@ function Contact() {
                 <span>Instagram: @dirace_</span>
                 <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
               </a>
-              <a href="mailto:studio@dirace.com">studio@dirace.com</a>
               <span>Mon–Fri / 09:00–18:00 WAT</span>
               <span>
-                Victoria Island
+                Lagos & Abuja
                 <br />
-                Lagos, Nigeria
+                Nigeria
               </span>
             </div>
           </div>
@@ -2079,8 +2354,38 @@ function Contact() {
 }
 
 function Wishlist({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
-  const { products } = useStore();
+  const { products, currentUser, openAuthModal } = useStore();
   const saved = products.filter((product) => wishlist.includes(product.id));
+
+  if (!currentUser) {
+    return (
+      <main className="page-wrap">
+        <div className="page-header">
+          <div className="eyebrow accent">DIRACE / Personal Space</div>
+          <h1 className="display">CLIENT WISHLIST</h1>
+        </div>
+        <div className="empty-state">
+          <div className="accent"><Heart size={24} /></div>
+          <h2 className="display">CLIENT ACCOUNT REQUIRED</h2>
+          <p style={{ maxWidth: 440, margin: '14px auto 0', lineHeight: 1.8 }}>
+            Your personal wishlist archive is saved securely to your client account. Please create an account or sign in to curate and view your favorite pieces.
+          </p>
+          <div style={{ marginTop: 28, display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => openAuthModal('Create an account or sign in to view and save your favorite pieces.')}
+            >
+              Sign In / Create Account <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+            </button>
+            <Link href="/shop" className="secondary-btn">
+              Explore Collection
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-wrap">
@@ -2116,7 +2421,7 @@ function Cart({
   onQty: (index: number, delta: number) => void;
   onRemove: (index: number) => void;
 }) {
-  const { products } = useStore();
+  const { products, currentUser, openAuthModal } = useStore();
   const detailed = items
     .map((item) => ({
       ...item,
@@ -2127,6 +2432,36 @@ function Cart({
   const subtotal = detailed.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const shippingFee = 5000;
   const grandTotal = subtotal + shippingFee;
+
+  if (!currentUser) {
+    return (
+      <main className="page-wrap">
+        <div className="page-header">
+          <div className="eyebrow accent">DIRACE / Your Selection</div>
+          <h1 className="display">SHOPPING BAG</h1>
+        </div>
+        <div className="empty-state">
+          <div className="accent"><ShoppingBag size={24} /></div>
+          <h2 className="display">CLIENT ACCOUNT REQUIRED</h2>
+          <p style={{ maxWidth: 440, margin: '14px auto 0', lineHeight: 1.8 }}>
+            An authenticated client account is required to curate pieces into your bag and complete checkout. Please sign in or create an account to continue.
+          </p>
+          <div style={{ marginTop: 28, display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => openAuthModal('Create an account or sign in to add pieces to your bag and proceed to checkout.')}
+            >
+              Sign In / Create Account <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+            </button>
+            <Link href="/shop" className="secondary-btn">
+              Explore Collection
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-wrap">
@@ -2246,18 +2581,58 @@ function EmptyState({
 }
 
 function Checkout({ items }: { items: CartItem[] }) {
-  const { products, clearCart, refreshOrders } = useStore();
+  const { products, clearCart, refreshOrders, currentUser, openAuthModal } = useStore();
   const [placed, setPlaced] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
-    email: '',
-    name: '',
+    email: currentUser?.email || '',
+    name: currentUser?.user_metadata?.full_name || '',
     address: '',
     city: '',
     postcode: '',
   });
+
+  useEffect(() => {
+    if (currentUser) {
+      setForm((prev) => ({
+        ...prev,
+        email: prev.email || currentUser.email || '',
+        name: prev.name || currentUser.user_metadata?.full_name || '',
+      }));
+    }
+  }, [currentUser]);
+
+  if (!currentUser) {
+    return (
+      <main className="page-wrap">
+        <div className="page-header">
+          <div className="eyebrow accent">DIRACE / Secure checkout</div>
+          <h1 className="display">CLIENT CHECKOUT</h1>
+        </div>
+        <div className="empty-state">
+          <div className="accent"><Lock size={24} /></div>
+          <h2 className="display">CLIENT ACCOUNT REQUIRED</h2>
+          <p style={{ maxWidth: 440, margin: '14px auto 0', lineHeight: 1.8 }}>
+            Please sign in or create an account to proceed with your order, secure your delivery address, and receive real-time dispatch tracking.
+          </p>
+          <div style={{ marginTop: 28, display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => openAuthModal('Create an account or sign in to complete your checkout.')}
+            >
+              Sign In / Create Account <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
+            </button>
+            <Link href="/cart" className="secondary-btn">
+              Return to Bag
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   const detailedItems = items
     .map((item) => ({
@@ -5705,6 +6080,31 @@ function App() {
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [items, setItems] = useState<CartItem[]>([]);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMessage, setAuthModalMessage] = useState('');
+  const [pendingAuthAction, setPendingAuthAction] = useState<(() => void) | null>(null);
+
+  const openAuthModal = (message?: string, onSuccess?: () => void) => {
+    setAuthModalMessage(message || 'Please create an account or sign in to continue.');
+    setPendingAuthAction(onSuccess ? () => onSuccess : null);
+    setAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setAuthModalOpen(false);
+    setPendingAuthAction(null);
+  };
+
+  const handleAuthSuccess = () => {
+    if (pendingAuthAction) {
+      const action = pendingAuthAction;
+      setPendingAuthAction(null);
+      // Small timeout to allow user state propagation
+      setTimeout(() => {
+        action();
+      }, 100);
+    }
+  };
 
   const openQuickView = (product: Product) => {
     setQuickViewProduct(product);
@@ -5758,6 +6158,18 @@ function App() {
     try {
       const u = await getSupabaseCurrentUser();
       setCurrentUser(u);
+      if (u) {
+        // Load user-specific wishlist and cart
+        try {
+          const savedWish = localStorage.getItem(`dirace_wishlist_${u.id}`);
+          if (savedWish) setWishlist(JSON.parse(savedWish));
+          const savedCart = localStorage.getItem(`dirace_cart_${u.id}`);
+          if (savedCart) setItems(JSON.parse(savedCart));
+        } catch (e) {}
+      } else {
+        setWishlist([]);
+        setItems([]);
+      }
     } catch (e) {
       console.warn('Could not refresh current user:', e);
     }
@@ -5782,11 +6194,46 @@ function App() {
     refreshUser();
   }, []);
 
+  // Persist user wishlist when changed
+  useEffect(() => {
+    if (currentUser?.id) {
+      try {
+        localStorage.setItem(`dirace_wishlist_${currentUser.id}`, JSON.stringify(wishlist));
+      } catch (e) {}
+    }
+  }, [wishlist, currentUser?.id]);
+
+  // Persist user cart when changed
+  useEffect(() => {
+    if (currentUser?.id) {
+      try {
+        localStorage.setItem(`dirace_cart_${currentUser.id}`, JSON.stringify(items));
+      } catch (e) {}
+    }
+  }, [items, currentUser?.id]);
+
   const toggleWish = (id: string) => {
+    if (!currentUser) {
+      openAuthModal('Create an account or sign in to save pieces to your favorites.', () => {
+        setWishlist((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+      });
+      return;
+    }
     setWishlist((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   };
 
   const add = (id: string, size: string) => {
+    if (!currentUser) {
+      openAuthModal('Create an account or sign in to add pieces to your bag.', () => {
+        setItems((current) => {
+          const found = current.find((item) => item.productId === id && item.size === size);
+          return found
+            ? current.map((item) => (item === found ? { ...item, quantity: item.quantity + 1 } : item))
+            : [...current, { productId: id, size, quantity: 1 }];
+        });
+      });
+      return;
+    }
     setItems((current) => {
       const found = current.find((item) => item.productId === id && item.size === size);
       return found
@@ -5796,6 +6243,10 @@ function App() {
   };
 
   const qty = (index: number, delta: number) => {
+    if (!currentUser) {
+      openAuthModal('Create an account or sign in to manage your bag.');
+      return;
+    }
     setItems((current) =>
       current
         .map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item))
@@ -5804,6 +6255,10 @@ function App() {
   };
 
   const remove = (index: number) => {
+    if (!currentUser) {
+      openAuthModal('Create an account or sign in to manage your bag.');
+      return;
+    }
     setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
@@ -5834,6 +6289,10 @@ function App() {
           closeQuickView,
           addToCart: add,
           clearCart,
+          authModalOpen,
+          authModalMessage,
+          openAuthModal,
+          closeAuthModal,
         }}
       >
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
@@ -5849,6 +6308,12 @@ function App() {
           <Footer />
         </WouterRouter>
         <QuickViewModal wishlist={wishlist} onToggleWish={toggleWish} />
+        <AuthModal
+          isOpen={authModalOpen}
+          message={authModalMessage}
+          onClose={closeAuthModal}
+          onSuccess={handleAuthSuccess}
+        />
         <Toaster />
       </StoreContext.Provider>
     </TooltipProvider>
