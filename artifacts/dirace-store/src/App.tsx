@@ -43,6 +43,7 @@ import {
   Mail,
   Send,
   FileText,
+  MapPin,
 } from 'lucide-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useRoute } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -83,6 +84,29 @@ import type { User } from '@supabase/supabase-js';
 
 export type CartItem = { productId: string; size: string; quantity: number };
 
+export interface ArchiveRecord {
+  id: string;
+  code: string;
+  volume: string;
+  title: string;
+  season: string;
+  status: string;
+  description: string;
+  materials: string;
+}
+
+export interface StudioEvent {
+  id: string;
+  badge: string;
+  date: string;
+  city: string;
+  title: string;
+  time: string;
+  location: string;
+  description: string;
+  accessStatus: string;
+}
+
 interface StoreContextType {
   products: Product[];
   refreshProducts: () => Promise<void>;
@@ -94,6 +118,14 @@ interface StoreContextType {
   refreshReviews: () => Promise<void>;
   addReview: (review: Omit<Review, 'id' | 'created_at'>) => Promise<Review>;
   deleteReview: (reviewId: string) => Promise<void>;
+  archives: ArchiveRecord[];
+  addArchive: (record: Omit<ArchiveRecord, 'id'>) => Promise<ArchiveRecord>;
+  updateArchive: (id: string, updates: Partial<ArchiveRecord>) => Promise<void>;
+  deleteArchive: (id: string) => Promise<void>;
+  events: StudioEvent[];
+  addEvent: (event: Omit<StudioEvent, 'id'>) => Promise<StudioEvent>;
+  updateEvent: (id: string, updates: Partial<StudioEvent>) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
   currentUser: User | null;
   refreshUser: () => Promise<void>;
   quickViewProduct: Product | null;
@@ -118,6 +150,14 @@ const StoreContext = createContext<StoreContextType>({
   refreshReviews: async () => {},
   addReview: async () => ({} as Review),
   deleteReview: async () => {},
+  archives: [],
+  addArchive: async () => ({} as ArchiveRecord),
+  updateArchive: async () => {},
+  deleteArchive: async () => {},
+  events: [],
+  addEvent: async () => ({} as StudioEvent),
+  updateEvent: async () => {},
+  deleteEvent: async () => {},
   currentUser: null,
   refreshUser: async () => {},
   quickViewProduct: null,
@@ -180,14 +220,59 @@ export function WhatsAppIcon({ size = 14, className = "" }: { size?: number; cla
   );
 }
 
+export function WatermarkImage({
+  aspectRatio,
+  className = '',
+  style,
+  height,
+  width,
+  label = 'COMING SOON',
+  subtitle,
+}: {
+  aspectRatio?: string | number;
+  className?: string;
+  style?: React.CSSProperties;
+  height?: string | number;
+  width?: string | number;
+  label?: string;
+  subtitle?: string;
+}) {
+  return (
+    <div
+      className={`watermark-media ${className}`}
+      style={{
+        aspectRatio: aspectRatio || undefined,
+        height: height || undefined,
+        width: width || undefined,
+        ...style,
+      }}
+      aria-label="Image coming soon"
+    >
+      <div className="watermark-pattern-bg" aria-hidden="true">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="watermark-diagonal-line">
+            <span>COMING SOON</span>
+            <span>COMING SOON</span>
+            <span>COMING SOON</span>
+          </div>
+        ))}
+      </div>
+      <div className="watermark-badge">
+        <span className="watermark-main-text">{label}</span>
+        {subtitle && <span className="watermark-sub-text">{subtitle}</span>}
+      </div>
+    </div>
+  );
+}
+
 function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount: number }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const links = [
     ['Shop', '/shop'],
-    ['Collections', '/collections'],
+    ['Archives', '/archives'],
+    ['Events', '/events'],
     ['About', '/about'],
-    ['Contact', '/contact'],
   ];
 
   useEffect(() => {
@@ -205,14 +290,6 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
     <>
       <header className="nav">
         <div className="page-wrap nav-inner">
-          <button
-            className="icon-btn mobile-menu"
-            aria-label="Open navigation"
-            data-testid="button-open-navigation"
-            onClick={() => setMenuOpen(true)}
-          >
-            <Menu size={19} strokeWidth={1.5} />
-          </button>
           <Link href="/" className="brand-lockup" data-testid="link-logo" aria-label="DIRACE Home">
             <img
               src="/diracename-removebg-preview.png"
@@ -232,6 +309,22 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
               </Link>
             ))}
           </nav>
+          {/* Centered Brand Emblem Logo */}
+          <Link
+            href="/"
+            className="nav-center-logo"
+            data-testid="link-center-logo"
+            aria-label="DIRACE Home"
+          >
+            <div className="brand-logo-frame">
+              <img
+                src="/WhatsApp_Image_2026-09-13_at_08.22.48-removebg-preview.png"
+                alt="DIRACE"
+                className="brand-logo-img"
+              />
+            </div>
+          </Link>
+          {/* Header Actions - hidden on mobile via CSS as requested */}
           <div className="nav-actions">
             <Link href="/search" className="icon-btn" aria-label="Search" data-testid="link-search">
               <Search size={18} strokeWidth={1.5} />
@@ -248,100 +341,114 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
               {cartCount > 0 && <span className="count-dot">{cartCount}</span>}
             </Link>
           </div>
+          {/* Mobile Menu Button - positioned on right of header */}
+          <button
+            className="icon-btn mobile-menu"
+            aria-label="Open navigation"
+            data-testid="button-open-navigation"
+            onClick={() => setMenuOpen(true)}
+          >
+            <Menu size={20} strokeWidth={1.5} />
+          </button>
         </div>
       </header>
+
+      {/* Side Menu Drawer - slides in from the right, does not cover screen */}
       {menuOpen && (
-        <div
-          className="mobile-drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Site Navigation"
-        >
-          <div className="mobile-drawer-header">
-            <Link href="/" className="brand-lockup" onClick={() => setMenuOpen(false)} aria-label="DIRACE Home">
-              <img
-                src="/diracename-removebg-preview.png"
-                alt="DIRACE"
-                className="brand-name-img"
-              />
-            </Link>
-            <button
-              className="icon-btn"
-              onClick={() => setMenuOpen(false)}
-              aria-label="Close navigation"
-              data-testid="button-close-navigation"
-            >
-              <X size={20} />
-            </button>
-          </div>
-          <div className="mobile-drawer-body">
-            <div className="mobile-primary-links">
-              {links.map(([label, href]) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`mobile-nav-item display ${location === href ? 'active' : ''}`}
-                  onClick={() => setMenuOpen(false)}
-                  data-testid={`mobile-link-${label.toLowerCase()}`}
-                >
-                  {label}
-                </Link>
-              ))}
-              <Link
-                href="/admin"
-                className="mobile-nav-item display mobile-admin-link"
+        <div className="mobile-side-menu-container">
+          <div
+            className="mobile-side-menu-backdrop"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <aside
+            className="mobile-side-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site Navigation"
+          >
+            <div className="mobile-drawer-header menu-stagger-item menu-stagger-1">
+              <span className="mono muted" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                Menu
+              </span>
+              <button
+                className="icon-btn"
                 onClick={() => setMenuOpen(false)}
+                aria-label="Close navigation"
+                data-testid="button-close-navigation"
               >
-                Studio Admin
-              </Link>
+                <X size={20} strokeWidth={1.5} />
+              </button>
             </div>
+            <div className="mobile-drawer-body">
+              <div className="mobile-primary-links">
+                {links.map(([label, href], idx) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={`mobile-nav-item menu-stagger-item menu-stagger-${idx + 2} ${location === href ? 'active' : ''}`}
+                    onClick={() => setMenuOpen(false)}
+                    data-testid={`mobile-link-${label.toLowerCase()}`}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
 
-            <div className="mobile-drawer-shortcuts">
-              <div className="eyebrow muted" style={{ marginBottom: 10 }}>Personal & Bag</div>
-              <div className="mobile-shortcuts-grid">
-                <Link href="/search" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
-                  <Search size={15} />
-                  <span>Search</span>
-                </Link>
-                <Link href="/account" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
-                  <UserRound size={15} />
-                  <span>Account</span>
-                </Link>
-                <Link href="/wishlist" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
-                  <Heart size={15} />
-                  <span>Wishlist {wishlistCount > 0 ? `(${wishlistCount})` : ''}</span>
-                </Link>
-                <Link href="/cart" className="mobile-shortcut-btn" onClick={() => setMenuOpen(false)}>
-                  <ShoppingBag size={15} />
-                  <span>Bag {cartCount > 0 ? `(${cartCount})` : ''}</span>
-                </Link>
+              <div className="mobile-drawer-shortcuts menu-stagger-item menu-stagger-6">
+                <div className="eyebrow muted" style={{ marginBottom: 12 }}>Personal & Bag</div>
+                <div className="mobile-shortcuts-grid">
+                  <Link href="/search" className="mobile-shortcut-btn menu-stagger-item menu-stagger-7" onClick={() => setMenuOpen(false)}>
+                    <Search size={15} />
+                    <span>Search</span>
+                  </Link>
+                  <Link href="/account" className="mobile-shortcut-btn menu-stagger-item menu-stagger-8" onClick={() => setMenuOpen(false)}>
+                    <UserRound size={15} />
+                    <span>Account</span>
+                  </Link>
+                  <Link href="/wishlist" className="mobile-shortcut-btn menu-stagger-item menu-stagger-9" onClick={() => setMenuOpen(false)}>
+                    <Heart size={15} />
+                    <span>Wishlist {wishlistCount > 0 ? `(${wishlistCount})` : ''}</span>
+                  </Link>
+                  <Link href="/cart" className="mobile-shortcut-btn menu-stagger-item menu-stagger-10" onClick={() => setMenuOpen(false)}>
+                    <ShoppingBag size={15} />
+                    <span>Bag {cartCount > 0 ? `(${cartCount})` : ''}</span>
+                  </Link>
+                </div>
+              </div>
+
+              <div className="mobile-drawer-footer mono muted menu-stagger-item menu-stagger-11">
+                <div>PRICING IN NGN (₦) · LAGOS / ABUJA, NIGERIA</div>
+                <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center' }}>
+                  <a
+                    href="https://www.instagram.com/dirace_?stkn=djRpbnhoamh2bWJh&utm_source=qr"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="footer-social-link"
+                  >
+                    <InstagramIcon size={14} />
+                    <span>@dirace_</span>
+                  </a>
+                  <a
+                    href="https://wa.me/2347067878342"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="footer-social-link"
+                  >
+                    <WhatsAppIcon size={14} />
+                    <span>WhatsApp (+234 706 787 8342)</span>
+                  </a>
+                  <a
+                    href="mailto:diraceadmin@gmail.com"
+                    className="footer-social-link"
+                  >
+                    <Mail size={14} />
+                    <span>diraceadmin@gmail.com</span>
+                  </a>
+                </div>
               </div>
             </div>
-
-            <div className="mobile-drawer-footer mono muted">
-              <div>PRICING IN NGN (₦) · LAGOS / ABUJA, NIGERIA</div>
-              <div style={{ marginTop: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
-                <a
-                  href="https://www.instagram.com/dirace_?stkn=djRpbnhoamh2bWJh&utm_source=qr"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="footer-social-link"
-                >
-                  <InstagramIcon size={14} />
-                  <span>@dirace_</span>
-                </a>
-                <a
-                  href="https://wa.me/2349136660187"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="footer-social-link"
-                >
-                  <WhatsAppIcon size={14} />
-                  <span>WhatsApp</span>
-                </a>
-              </div>
-            </div>
-          </div>
+          </aside>
         </div>
       )}
     </>
@@ -369,17 +476,17 @@ function Footer() {
             <div className="footer-title">Explore</div>
             <div className="footer-links">
               <Link href="/shop">Shop all</Link>
-              <Link href="/collections">Collections</Link>
+              <Link href="/archives">Archives</Link>
+              <Link href="/events">Events</Link>
               <Link href="/about">Our standard</Link>
-              <Link href="/contact">Contact</Link>
             </div>
           </div>
           <div>
             <div className="footer-title">Client service</div>
             <div className="footer-links">
-              <Link href="/contact">Shipping & returns</Link>
               <Link href="/account">Account</Link>
               <Link href="/wishlist">Wishlist</Link>
+              <Link href="/cart">Shopping Bag</Link>
               <Link href="/admin">Studio Admin</Link>
             </div>
           </div>
@@ -398,14 +505,23 @@ function Footer() {
                 <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
               </a>
               <a
-                href="https://wa.me/2349136660187"
+                href="https://wa.me/2347067878342"
                 target="_blank"
                 rel="noreferrer"
                 className="footer-social-link"
                 data-testid="link-footer-whatsapp"
               >
                 <WhatsAppIcon size={14} className="footer-social-icon" />
-                <span>WhatsApp (+234 913 666 0187)</span>
+                <span>WhatsApp (+234 706 787 8342)</span>
+                <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
+              </a>
+              <a
+                href="mailto:diraceadmin@gmail.com"
+                className="footer-social-link"
+                data-testid="link-footer-email"
+              >
+                <Mail size={14} className="footer-social-icon" />
+                <span>diraceadmin@gmail.com</span>
                 <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
               </a>
             </div>
@@ -716,8 +832,17 @@ function ProductCard({
   return (
     <article className="product-card reveal" data-testid={`card-product-${product.id}`}>
       <div className="product-media">
-        <Link href={`/product/${product.id}`} data-testid={`link-product-${product.id}`}>
-          <img src={product.image} alt={product.alt || product.name} />
+        <Link
+          href={`/product/${product.id}`}
+          data-testid={`link-product-${product.id}`}
+          style={{ display: 'block', width: '100%', height: '100%' }}
+        >
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle={product.name.toUpperCase()}
+            aspectRatio="3/4"
+            style={{ width: '100%', height: '100%' }}
+          />
         </Link>
         {product.badge && <span className="product-badge">{product.badge}</span>}
         <button
@@ -855,10 +980,11 @@ function QuickViewModal({
         </button>
 
         <div className="quick-view-media">
-          <img
-            src={quickViewProduct.image}
-            alt={quickViewProduct.alt || quickViewProduct.name}
-            data-testid="quick-view-image"
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle={quickViewProduct.name.toUpperCase()}
+            aspectRatio="3/4"
+            style={{ width: '100%', height: '100%', minHeight: 300 }}
           />
           {quickViewProduct.badge && (
             <span className="product-badge">{quickViewProduct.badge}</span>
@@ -1076,7 +1202,13 @@ function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
             </div>
           </div>
         </div>
-        <div className="hero-image reveal delay-2" role="img" aria-label="DIRACE campaign portrait" />
+        <div className="hero-image reveal delay-2">
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle="CAMPAIGN VISUALS IN PRODUCTION"
+            style={{ height: '100%', minHeight: '100%', border: 'none' }}
+          />
+        </div>
       </section>
       <div className="marquee">
         <div className="marquee-track">
@@ -1147,7 +1279,13 @@ function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
         </div>
       </section>
       <section className="split-feature">
-        <div className="feature-image" role="img" aria-label="Charcoal tailoring on a steel chair" />
+        <div className="feature-image">
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle="THE FORM STUDY // ARCHIVE EMBARGO"
+            style={{ height: '100%', minHeight: '100%', border: 'none' }}
+          />
+        </div>
         <div className="feature-copy">
           <div>
             <div className="feature-number">02 / THE FORM STUDY</div>
@@ -1162,8 +1300,8 @@ function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
               Our first study in tailoring: softened structure, severe proportions, and the kind of cloth that remembers
               where you have been.
             </p>
-            <Link href="/collections" className="text-link" data-testid="link-form-study">
-              View the collection <ArrowRight size={14} />
+            <Link href="/archives" className="text-link" data-testid="link-form-study">
+              Explore the archives <ArrowRight size={14} />
             </Link>
           </div>
         </div>
@@ -1187,15 +1325,15 @@ function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (i
         </div>
         <div className="editorial-strip">
           <div className="editorial-tile">
-            <img src="/dirace-look-03.jpg" alt="Ivory knit textile detail" />
+            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="01 — TEXTURE" style={{ height: '100%', width: '100%' }} />
             <span className="editorial-label">01 — Texture</span>
           </div>
           <div className="editorial-tile">
-            <img src="/dirace-look-02.jpg" alt="DIRACE street look" />
+            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="02 — MOVEMENT" style={{ height: '100%', width: '100%' }} />
             <span className="editorial-label">02 — Movement</span>
           </div>
           <div className="editorial-tile">
-            <img src="/dirace-look-01.jpg" alt="Charcoal tailoring detail" />
+            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="03 — FORM" style={{ height: '100%', width: '100%' }} />
             <span className="editorial-label">03 — Form</span>
           </div>
         </div>
@@ -1264,7 +1402,7 @@ function Signup() {
 function Shop({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
   const { products } = useStore();
   const [category, setCategory] = useState('All');
-  const categories = ['All', 'Outerwear', 'Tailoring', 'Bottoms', 'Tops', 'Accessories', 'Knitwear'];
+  const categories = ['All', 'Outerwear', 'Tops', 'Bottoms', 'Caps', 'Denim'];
   const filtered = category === 'All' ? products : products.filter((p) => p.category === category);
 
   return (
@@ -1479,11 +1617,17 @@ function ProductDetail({
       </div>
       <div className="detail-layout">
         <div className="detail-gallery">
-          <img src={product.image} alt={product.alt || product.name} />
-          <img
-            src={product.image}
-            alt={`${product.name} detail`}
-            style={{ filter: 'saturate(.3) contrast(1.08)', transform: 'scaleX(-1)' }}
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle={`${product.name.toUpperCase()} // VIEW 01`}
+            aspectRatio="3/4"
+            style={{ width: '100%', height: '100%' }}
+          />
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle={`${product.name.toUpperCase()} // VIEW 02`}
+            aspectRatio="3/4"
+            style={{ width: '100%', height: '100%' }}
           />
         </div>
         <div className="detail-info">
@@ -1515,7 +1659,7 @@ function ProductDetail({
           <p className="detail-description">{product.description}</p>
           <div className="size-label">
             <span>Select size</span>
-            <Link href="/contact">Size guide</Link>
+            <Link href="/about">Size guide & philosophy</Link>
           </div>
           <div className="size-grid">
             {(product.sizes || ['XS', 'S', 'M', 'L']).map((item) => (
@@ -2123,70 +2267,155 @@ function ProductDetail({
   );
 }
 
-function Collections() {
+function Archives() {
+  const { archives } = useStore();
+  const [selectedVolume, setSelectedVolume] = useState('All');
+  const [inquiryRecord, setInquiryRecord] = useState<ArchiveRecord | null>(null);
+  const [inquiryEmail, setInquiryEmail] = useState('');
+  const [inquirySent, setInquirySent] = useState(false);
+
+  const volumes = useMemo(() => {
+    const list = ['All'];
+    archives.forEach((r) => {
+      if (r.volume && !list.includes(r.volume)) {
+        list.push(r.volume);
+      }
+    });
+    return list;
+  }, [archives]);
+
+  const filtered = selectedVolume === 'All'
+    ? archives
+    : archives.filter((r) => r.volume === selectedVolume);
+
+  const handleInquirySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setInquirySent(true);
+    setTimeout(() => {
+      setInquirySent(false);
+      setInquiryRecord(null);
+      setInquiryEmail('');
+    }, 2200);
+  };
+
   return (
-    <main>
-      <div className="page-wrap">
-        <div className="page-header">
-          <div className="eyebrow accent">DIRACE / Collections</div>
-          <h1 className="display">
-            A STUDY IN
-            <br />
-            CONTRAST
-          </h1>
-        </div>
+    <main className="page-wrap">
+      <div className="page-header">
+        <div className="eyebrow accent">DIRACE / Archives</div>
+        <h1 className="display">
+          CHRONICLE OF
+          <br />
+          EDITIONS.
+        </h1>
+        <p className="muted" style={{ maxWidth: 460, marginTop: 14, fontSize: 13, lineHeight: 1.7 }}>
+          A documented retrospective of past volumes, prototype studies, and archival silhouettes developed in Lagos and Abuja.
+        </p>
       </div>
-      <section className="split-feature">
-        <div className="feature-image" style={{ backgroundImage: "url('/dirace-look-02.jpg')" }} />
-        <div className="feature-copy">
-          <div>
-            <div className="feature-number">Collection 01 / 25</div>
-            <h2 className="display">
-              THE NEW
-              <br />
-              STANDARD.
-            </h2>
+
+      {archives.length === 0 ? (
+        <div className="empty-state" style={{ marginTop: 60, padding: '70px 24px' }}>
+          <h2 className="display" style={{ textTransform: 'uppercase', margin: 0, fontSize: 18, letterSpacing: '0.04em' }}>
+            No archives
+          </h2>
+        </div>
+      ) : (
+        <>
+          {volumes.length > 1 && (
+            <div className="archives-timeline">
+              {volumes.map((vol) => (
+                <button
+                  key={vol}
+                  className={`archives-filter-pill ${selectedVolume === vol ? 'active' : ''}`}
+                  onClick={() => setSelectedVolume(vol)}
+                >
+                  {vol === 'All' ? 'All Records' : vol}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="archives-grid">
+            {filtered.map((record) => (
+              <article key={record.id} className="archive-card">
+                <div style={{ aspectRatio: '3/4', width: '100%', position: 'relative' }}>
+                  <WatermarkImage
+                    label="COMING SOON"
+                    subtitle={record.code}
+                    aspectRatio="3/4"
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </div>
+                <div className="archive-meta">
+                  <span className="mono muted">{record.season}</span>
+                  <span className="event-badge">{record.status}</span>
+                </div>
+                <h3 className="archive-title">{record.title}</h3>
+                <p className="archive-desc">{record.description}</p>
+                <div className="archive-materials">{record.materials}</div>
+                <div style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="text-link mono"
+                    style={{ fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    onClick={() => setInquiryRecord(record)}
+                  >
+                    Request Archival Note <ArrowRight size={12} />
+                  </button>
+                </div>
+              </article>
+            ))}
           </div>
-          <div>
-            <p>
-              Built from the tension between utility and elegance. A wardrobe of strong lines, generous volume and
-              subtle interruption.
+        </>
+      )}
+
+      {inquiryRecord && (
+        <div
+          className="auth-modal-overlay"
+          onClick={() => setInquiryRecord(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="auth-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <div className="eyebrow accent">{inquiryRecord.code}</div>
+              <button className="icon-btn" onClick={() => setInquiryRecord(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <h3 className="display" style={{ fontSize: 20 }}>{inquiryRecord.title}</h3>
+            <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 8 }}>
+              Inquire regarding archival record study, provenance notes, or private collection lending.
             </p>
-            <Link href="/shop" className="text-link">
-              Shop Collection 01 <ArrowRight size={14} />
-            </Link>
+
+            {inquirySent ? (
+              <div style={{ padding: '24px 0', textAlign: 'center' }}>
+                <Check size={28} className="accent" style={{ margin: '0 auto 8px' }} />
+                <div className="mono" style={{ fontSize: 13, fontWeight: 700 }}>Inquiry Received.</div>
+                <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  The studio repository will transmit archival records to {inquiryEmail}.
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleInquirySubmit} style={{ display: 'grid', gap: 14, marginTop: 18 }}>
+                <div className="field">
+                  <label htmlFor="arch-email">Your client email</label>
+                  <input
+                    id="arch-email"
+                    type="email"
+                    required
+                    value={inquiryEmail}
+                    onChange={(e) => setInquiryEmail(e.target.value)}
+                    placeholder="client@domain.com"
+                  />
+                </div>
+                <button type="submit" className="primary-btn">
+                  Transmit Archival Request
+                </button>
+              </form>
+            )}
           </div>
         </div>
-      </section>
-      <section className="section page-wrap">
-        <div className="section-head">
-          <div>
-            <div className="eyebrow accent">The language</div>
-            <h2 className="display section-title">
-              THREE
-              <br />
-              INSTINCTS
-            </h2>
-          </div>
-          <div className="section-copy">
-            Every DIRACE collection starts with a question: what can a garment say before you do?
-          </div>
-        </div>
-        <div className="editorial-strip">
-          <div className="editorial-tile">
-            <img src="/dirace-look-01.jpg" alt="Tailoring collection" />
-            <span className="editorial-label">01 — Structure</span>
-          </div>
-          <div className="editorial-tile">
-            <img src="/dirace-look-03.jpg" alt="Knitwear collection" />
-            <span className="editorial-label">02 — Ease</span>
-          </div>
-          <div className="editorial-tile">
-            <img src="/dirace-hero.jpg" alt="Outerwear collection" />
-            <span className="editorial-label">03 — Presence</span>
-          </div>
-        </div>
-      </section>
+      )}
     </main>
   );
 }
@@ -2227,14 +2456,14 @@ function About() {
             </p>
           </div>
         </div>
-        <div
-          style={{
-            marginTop: 90,
-            aspectRatio: '1.9',
-            background: "url('/dirace-hero.jpg') center 42% / cover",
-            filter: 'saturate(.5)',
-          }}
-        />
+        <div style={{ marginTop: 90 }}>
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle="DIRACE PHILOSOPHY ARCHIVE // LAGOS & ABUJA"
+            aspectRatio="1.9"
+            style={{ width: '100%' }}
+          />
+        </div>
         <div className="about-columns" style={{ marginTop: 80 }}>
           <div>
             <div className="eyebrow accent">01 — Materials</div>
@@ -2256,99 +2485,203 @@ function About() {
   );
 }
 
-function Contact() {
-  const [sent, setSent] = useState(false);
+function Events() {
+  const { events } = useStore();
+  const [selectedEvent, setSelectedEvent] = useState<StudioEvent | null>(null);
+  const [rsvpForm, setRsvpForm] = useState({ name: '', email: '', phone: '', city: 'Lagos' });
+  const [rsvpSuccess, setRsvpSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleRsvp = (e: React.FormEvent) => {
+    e.preventDefault();
     setSubmitting(true);
     setTimeout(() => {
       setSubmitting(false);
-      setSent(true);
+      setRsvpSuccess(true);
+      setTimeout(() => {
+        setRsvpSuccess(false);
+        setSelectedEvent(null);
+        setRsvpForm({ name: '', email: '', phone: '', city: 'Lagos' });
+      }, 2600);
     }, 600);
   };
 
   return (
     <main className="page-wrap">
       <div className="page-header">
-        <div className="eyebrow accent">DIRACE / Contact</div>
+        <div className="eyebrow accent">DIRACE / Events</div>
         <h1 className="display">
-          SAY
+          STUDIO
           <br />
-          HELLO.
+          EXPERIENCES.
         </h1>
+        <p className="muted" style={{ maxWidth: 460, marginTop: 14, fontSize: 13, lineHeight: 1.7 }}>
+          Physical presentations, private salon showings, and runway installations across Lagos and Abuja, Nigeria.
+        </p>
       </div>
-      <div className="content-narrow">
-        <div className="about-grid">
-          <div>
-            <p className="display" style={{ fontSize: 36 }}>
-              For questions about an order, a piece, or anything else on your mind.
-            </p>
-            <div className="footer-links" style={{ marginTop: 40 }}>
-              <a
-                href="https://wa.me/2349136660187"
-                target="_blank"
-                rel="noreferrer"
-                className="footer-social-link"
-              >
-                <WhatsAppIcon size={14} className="footer-social-icon" />
-                <span>WhatsApp: +234 913 666 0187</span>
-                <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
-              </a>
-              <a
-                href="https://www.instagram.com/dirace_?stkn=djRpbnhoamh2bWJh&utm_source=qr"
-                target="_blank"
-                rel="noreferrer"
-                className="footer-social-link"
-              >
-                <InstagramIcon size={14} className="footer-social-icon" />
-                <span>Instagram: @dirace_</span>
-                <ArrowUpRight size={11} style={{ opacity: 0.6 }} />
-              </a>
-              <span>Mon–Fri / 09:00–18:00 WAT</span>
-              <span>
-                Lagos & Abuja
-                <br />
-                Nigeria
-              </span>
-            </div>
-          </div>
-          {sent ? (
-            <div className="empty-state" style={{ padding: 50 }}>
-              <Check size={26} className="accent" />
-              <h2 style={{ fontSize: 28 }}>Message sent.</h2>
-              <p>We'll be in touch within two working days.</p>
-            </div>
-          ) : (
-            <form className="contact-form" onSubmit={handleSubmit}>
-              <div className="field">
-                <label htmlFor="name">Your name</label>
-                <input id="name" required data-testid="input-contact-name" disabled={submitting} />
+
+      {events.length === 0 ? (
+        <div className="empty-state" style={{ marginTop: 60, padding: '70px 24px' }}>
+          <h2 className="display" style={{ textTransform: 'uppercase', margin: 0, fontSize: 18, letterSpacing: '0.04em' }}>
+            No events
+          </h2>
+        </div>
+      ) : (
+        <div className="events-grid">
+          {events.map((event) => (
+            <article key={event.id} className="event-card">
+              <div className="event-date-block">
+                <span className="event-badge">{event.badge}</span>
+                <div className="display" style={{ fontSize: 22, marginTop: 4 }}>{event.date}</div>
+                <div className="mono muted" style={{ fontSize: 11, marginTop: 2 }}>{event.time}</div>
               </div>
-              <div className="field">
-                <label htmlFor="email">Email address</label>
-                <input id="email" type="email" required data-testid="input-contact-email" disabled={submitting} />
+              <div>
+                <h3 className="event-title">{event.title}</h3>
+                <p className="event-desc">{event.description}</p>
+                <div className="event-location mono muted">
+                  <MapPin size={12} className="accent" />
+                  <span>{event.location}</span>
+                  <span style={{ marginLeft: 10, opacity: 0.6 }}>· {event.accessStatus}</span>
+                </div>
               </div>
-              <div className="field">
-                <label htmlFor="message">Message</label>
-                <textarea id="message" required data-testid="input-contact-message" disabled={submitting} />
+              <div>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => setSelectedEvent(event)}
+                  style={{ padding: '12px 20px', whiteSpace: 'nowrap' }}
+                >
+                  Reserve Access
+                </button>
               </div>
-              <button className="primary-btn" type="submit" disabled={submitting} data-testid="button-contact-submit">
-                {submitting ? (
-                  <>
-                    Sending message... <Loader2 size={14} className="animate-spin" style={{ verticalAlign: 'middle', marginLeft: 6 }} />
-                  </>
-                ) : (
-                  <>
-                    Send message <ArrowRight size={14} style={{ verticalAlign: 'middle' }} />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 60, padding: 36, border: '1px solid hsl(var(--border))', background: 'hsl(var(--muted) / 0.3)' }}>
+        <div className="eyebrow accent">Private Appointment Inquiries</div>
+        <h3 className="display" style={{ fontSize: 24, marginTop: 6 }}>LAGOS & ABUJA RESIDENCIES</h3>
+        <p className="muted" style={{ maxWidth: 540, marginTop: 8, fontSize: 12, lineHeight: 1.8 }}>
+          For private VIP showroom appointments or bespoke tailoring consultation in Lagos and Abuja, reach out directly to the studio directors.
+        </p>
+        <div style={{ display: 'flex', gap: 20, marginTop: 20, flexWrap: 'wrap' }}>
+          <a
+            href="https://wa.me/2347067878342"
+            target="_blank"
+            rel="noreferrer"
+            className="secondary-btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <WhatsAppIcon size={14} />
+            <span>WhatsApp Studio (+234 706 787 8342)</span>
+          </a>
+          <a
+            href="mailto:diraceadmin@gmail.com"
+            className="secondary-btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <Mail size={14} />
+            <span>diraceadmin@gmail.com</span>
+          </a>
+          <a
+            href="https://www.instagram.com/dirace_?stkn=djRpbnhoamh2bWJh&utm_source=qr"
+            target="_blank"
+            rel="noreferrer"
+            className="secondary-btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <InstagramIcon size={14} />
+            <span>@dirace_ on Instagram</span>
+          </a>
         </div>
       </div>
+
+      {selectedEvent && (
+        <div
+          className="auth-modal-overlay"
+          onClick={() => setSelectedEvent(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="auth-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <span className="event-badge">{selectedEvent.badge}</span>
+              <button className="icon-btn" onClick={() => setSelectedEvent(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <h3 className="display" style={{ fontSize: 20 }}>{selectedEvent.title}</h3>
+            <div className="mono muted" style={{ fontSize: 11, marginTop: 4 }}>
+              {selectedEvent.date} · {selectedEvent.location}
+            </div>
+
+            {rsvpSuccess ? (
+              <div style={{ padding: '28px 0', textAlign: 'center' }}>
+                <Check size={30} className="accent" style={{ margin: '0 auto 10px' }} />
+                <h4 className="display" style={{ fontSize: 18 }}>ACCESS RESERVED.</h4>
+                <p className="muted" style={{ fontSize: 12, marginTop: 6, lineHeight: 1.6 }}>
+                  Your private RSVP has been registered for <strong>{rsvpForm.name || 'Guest'}</strong>. Pass details dispatched to {rsvpForm.email}.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleRsvp} style={{ display: 'grid', gap: 14, marginTop: 20 }}>
+                <div className="field">
+                  <label htmlFor="rsvp-name">Full name</label>
+                  <input
+                    id="rsvp-name"
+                    required
+                    value={rsvpForm.name}
+                    onChange={(e) => setRsvpForm({ ...rsvpForm, name: e.target.value })}
+                    placeholder="Alexander Wright"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="rsvp-email">Email address</label>
+                  <input
+                    id="rsvp-email"
+                    type="email"
+                    required
+                    value={rsvpForm.email}
+                    onChange={(e) => setRsvpForm({ ...rsvpForm, email: e.target.value })}
+                    placeholder="client@dirace.com"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="rsvp-phone">WhatsApp / Phone number</label>
+                  <input
+                    id="rsvp-phone"
+                    value={rsvpForm.phone}
+                    onChange={(e) => setRsvpForm({ ...rsvpForm, phone: e.target.value })}
+                    placeholder="+234 ..."
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="rsvp-city">Preferred Studio Location</label>
+                  <select
+                    id="rsvp-city"
+                    value={rsvpForm.city}
+                    onChange={(e) => setRsvpForm({ ...rsvpForm, city: e.target.value })}
+                    style={{
+                      padding: '10px 14px',
+                      background: 'transparent',
+                      border: '1px solid hsl(var(--border))',
+                      font: 'inherit',
+                    }}
+                  >
+                    <option value="Lagos">Lagos Studio</option>
+                    <option value="Abuja">Abuja Studio</option>
+                    <option value="International">International Guest</option>
+                  </select>
+                </div>
+                <button type="submit" className="primary-btn" disabled={submitting}>
+                  {submitting ? 'Confirming reservation...' : 'Confirm RSVP Reservation'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -2484,7 +2817,12 @@ function Cart({
           <div>
             {detailed.map((item, index) => (
               <div className="cart-item" key={`${item.product.id}-${item.size}`}>
-                <img src={item.product.image} alt={item.product.alt} />
+                <div style={{ width: 80, height: 100, flexShrink: 0 }}>
+                  <WatermarkImage
+                    label="COMING SOON"
+                    style={{ width: '100%', height: '100%', minHeight: 90 }}
+                  />
+                </div>
                 <div>
                   <div className="eyebrow accent">{item.product.category}</div>
                   <h3>{item.product.name}</h3>
@@ -3190,8 +3528,16 @@ function Admin() {
     reviews,
     refreshReviews,
     deleteReview,
+    archives,
+    addArchive,
+    updateArchive,
+    deleteArchive,
+    events,
+    addEvent,
+    updateEvent,
+    deleteEvent,
   } = useStore();
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'reviews'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'reviews' | 'archives' | 'events'>('inventory');
 
   // Studio Admin Authentication States
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -3272,11 +3618,44 @@ function Admin() {
 
   // Delete Confirmation Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'piece' | 'order' | 'review' | 'all-orders';
+    type: 'piece' | 'order' | 'review' | 'all-orders' | 'archive' | 'event';
     id: string;
     name: string;
   } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Archives Management States
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [editingArchive, setEditingArchive] = useState<ArchiveRecord | null>(null);
+  const [archiveForm, setArchiveForm] = useState({
+    code: 'VOL 01 // 001',
+    volume: 'Volume 01',
+    title: '',
+    season: 'Autumn / Winter 2026',
+    status: 'Permanent Archive',
+    description: '',
+    materials: '',
+  });
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [archiveVolumeFilter, setArchiveVolumeFilter] = useState('All');
+  const [isSavingArchive, setIsSavingArchive] = useState(false);
+
+  // Events Management States
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<StudioEvent | null>(null);
+  const [eventForm, setEventForm] = useState({
+    badge: 'UPCOMING SALON',
+    date: 'NOV 15, 2026',
+    time: '19:00 WAT',
+    city: 'Lagos',
+    location: 'Victoria Island, Lagos, Nigeria',
+    title: '',
+    description: '',
+    accessStatus: 'Guest List & Reservation',
+  });
+  const [eventSearch, setEventSearch] = useState('');
+  const [eventCityFilter, setEventCityFilter] = useState('All');
+  const [isSavingEvent, setIsSavingEvent] = useState(false);
 
   // Search & Filter States
   const [inventorySearch, setInventorySearch] = useState('');
@@ -3579,6 +3958,10 @@ function Admin() {
         await refreshOrders();
       } else if (type === 'review') {
         await deleteReview(id);
+      } else if (type === 'archive') {
+        await deleteArchive(id);
+      } else if (type === 'event') {
+        await deleteEvent(id);
       }
     } catch (err) {
       console.error('Deletion error:', err);
@@ -4194,6 +4577,42 @@ function Admin() {
         >
           03 / Client Reflections ({reviews.length})
         </button>
+        <button
+          className={`mono ${activeTab === 'archives' ? 'accent' : 'muted'}`}
+          style={{
+            background: 'none',
+            border: 0,
+            padding: '12px 4px',
+            borderBottom: activeTab === 'archives' ? '2px solid hsl(var(--foreground))' : 'none',
+            fontWeight: activeTab === 'archives' ? 600 : 400,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+          onClick={() => setActiveTab('archives')}
+        >
+          04 / Archives Registry ({archives.length})
+        </button>
+        <button
+          className={`mono ${activeTab === 'events' ? 'accent' : 'muted'}`}
+          style={{
+            background: 'none',
+            border: 0,
+            padding: '12px 4px',
+            borderBottom: activeTab === 'events' ? '2px solid hsl(var(--foreground))' : 'none',
+            fontWeight: activeTab === 'events' ? 600 : 400,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+          onClick={() => setActiveTab('events')}
+        >
+          05 / Studio Events ({events.length})
+        </button>
       </div>
 
       {/* TAB 1: INVENTORY & STORAGE */}
@@ -4356,11 +4775,9 @@ function Admin() {
                 >
                   <option value="All">All Categories</option>
                   <option value="Outerwear">Outerwear</option>
-                  <option value="Tailoring">Tailoring</option>
                   <option value="Tops">Tops</option>
                   <option value="Bottoms">Bottoms</option>
-                  <option value="Knitwear">Knitwear</option>
-                  <option value="Accessories">Accessories</option>
+                  <option value="Caps">Caps</option>
                   <option value="Denim">Denim</option>
                 </select>
               </div>
@@ -4452,11 +4869,9 @@ function Admin() {
                       }}
                     >
                       <option value="Outerwear">Outerwear</option>
-                      <option value="Tailoring">Tailoring</option>
                       <option value="Tops">Tops</option>
                       <option value="Bottoms">Bottoms</option>
-                      <option value="Knitwear">Knitwear</option>
-                      <option value="Accessories">Accessories</option>
+                      <option value="Caps">Caps</option>
                       <option value="Denim">Denim</option>
                     </select>
                   </div>
@@ -4624,11 +5039,9 @@ function Admin() {
                       }}
                     >
                       <option value="Outerwear">Outerwear</option>
-                      <option value="Tailoring">Tailoring</option>
                       <option value="Tops">Tops</option>
                       <option value="Bottoms">Bottoms</option>
-                      <option value="Knitwear">Knitwear</option>
-                      <option value="Accessories">Accessories</option>
+                      <option value="Caps">Caps</option>
                       <option value="Denim">Denim</option>
                     </select>
                   </div>
@@ -4783,11 +5196,12 @@ function Admin() {
                         className={isOutOfStock ? 'row-out-of-stock' : isLowStock ? 'row-low-stock' : ''}
                       >
                         <td style={{ width: 60 }}>
-                          <img
-                            src={p.image}
-                            alt={p.name}
-                            style={{ width: 44, height: 52, objectFit: 'cover', filter: 'saturate(.7)' }}
-                          />
+                          <div style={{ width: 44, height: 52 }}>
+                            <WatermarkImage
+                              label="COMING SOON"
+                              style={{ width: '100%', height: '100%', minHeight: 48 }}
+                            />
+                          </div>
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -5946,6 +6360,757 @@ function Admin() {
         </section>
       )}
 
+      {/* TAB 4: ARCHIVES REGISTRY */}
+      {activeTab === 'archives' && (
+        <section>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div className="eyebrow accent">Historical Retrospective</div>
+              <h2 className="display" style={{ fontSize: 32, margin: '4px 0' }}>
+                STUDIO ARCHIVES REGISTRY
+              </h2>
+              <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
+                Log and curate past edition silhouettes, prototype studies, and archival garments.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => {
+                  setEditingArchive(null);
+                  setArchiveForm({
+                    code: `VOL 0${archives.length + 1} // 00${archives.length + 1}`,
+                    volume: 'Volume 01',
+                    title: '',
+                    season: 'Autumn / Winter 2026',
+                    status: 'Permanent Archive',
+                    description: '',
+                    materials: '',
+                  });
+                  setArchiveModalOpen(true);
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+              >
+                <Plus size={14} /> Log Archive Record
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: '1 1 240px' }}>
+              <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+              <input
+                type="text"
+                placeholder="Search archive by code, title, materials..."
+                value={archiveSearch}
+                onChange={(e) => setArchiveSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px 9px 34px',
+                  background: 'hsl(var(--background))',
+                  border: '1px solid hsl(var(--border))',
+                  fontSize: 12,
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+              {['All', 'Volume 01', 'Volume 02', 'Volume 03', 'Capsule X'].map((vol) => (
+                <button
+                  key={vol}
+                  type="button"
+                  className={`admin-subnav-pill ${archiveVolumeFilter === vol ? 'active' : ''}`}
+                  onClick={() => setArchiveVolumeFilter(vol)}
+                >
+                  {vol}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Archives Content Table */}
+          {archives.length === 0 ? (
+            <div className="empty-state" style={{ padding: '60px 20px', textAlign: 'center' }}>
+              <div className="eyebrow accent" style={{ marginBottom: 10 }}>Repository Empty</div>
+              <h3 className="display" style={{ fontSize: 22 }}>NO ARCHIVE RECORDS LOGGED YET</h3>
+              <p className="muted" style={{ maxWidth: 440, margin: '8px auto 20px', fontSize: 12, lineHeight: 1.6 }}>
+                The public archives page currently shows an empty retrospective. Add historical silhouettes to populate the registry.
+              </p>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => {
+                  setEditingArchive(null);
+                  setArchiveForm({
+                    code: 'VOL 01 // 001',
+                    volume: 'Volume 01',
+                    title: 'THE MONOLITH OVERCOAT',
+                    season: 'Autumn / Winter 2025',
+                    status: 'Permanent Archive',
+                    description: 'A study in severe vertical proportions with concealed double placket and horn buttons.',
+                    materials: '680gsm Raw Traceable Wool · Lagos Wash',
+                  });
+                  setArchiveModalOpen(true);
+                }}
+                style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={14} /> Add First Archive Record
+              </button>
+            </div>
+          ) : (
+            <div className="table-overflow">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Code / Volume</th>
+                    <th>Silhouette Title</th>
+                    <th>Season & Status</th>
+                    <th>Materials</th>
+                    <th>Description</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archives
+                    .filter((rec) => {
+                      const matchSearch =
+                        !archiveSearch ||
+                        rec.title.toLowerCase().includes(archiveSearch.toLowerCase()) ||
+                        rec.code.toLowerCase().includes(archiveSearch.toLowerCase()) ||
+                        rec.materials.toLowerCase().includes(archiveSearch.toLowerCase());
+                      const matchVolume =
+                        archiveVolumeFilter === 'All' || rec.volume === archiveVolumeFilter;
+                      return matchSearch && matchVolume;
+                    })
+                    .map((rec) => (
+                      <tr key={rec.id}>
+                        <td>
+                          <div className="mono" style={{ fontSize: 12, fontWeight: 700 }}>
+                            {rec.code}
+                          </div>
+                          <div className="mono muted" style={{ fontSize: 10 }}>
+                            {rec.volume}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase' }}>
+                            {rec.title}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="mono muted" style={{ fontSize: 11 }}>
+                            {rec.season}
+                          </div>
+                          <span className="event-badge" style={{ marginTop: 4, display: 'inline-block' }}>
+                            {rec.status}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 11, maxWidth: 220 }}>
+                          <span className="accent mono">{rec.materials}</span>
+                        </td>
+                        <td style={{ fontSize: 12, maxWidth: 280, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
+                          {rec.description}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: 6 }}>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Edit archive record"
+                              onClick={() => {
+                                setEditingArchive(rec);
+                                setArchiveForm({
+                                  code: rec.code,
+                                  volume: rec.volume,
+                                  title: rec.title,
+                                  season: rec.season,
+                                  status: rec.status,
+                                  description: rec.description,
+                                  materials: rec.materials,
+                                });
+                                setArchiveModalOpen(true);
+                              }}
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Delete archive record"
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: 'archive',
+                                  id: rec.id,
+                                  name: `${rec.code} (${rec.title})`,
+                                })
+                              }
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* TAB 5: STUDIO EVENTS */}
+      {activeTab === 'events' && (
+        <section>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div className="eyebrow accent">Salon & Runway Schedule</div>
+              <h2 className="display" style={{ fontSize: 32, margin: '4px 0' }}>
+                STUDIO EXPERIENCES & SALONS
+              </h2>
+              <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
+                Schedule forthcoming physical presentations, private salon showings, and runway installations across Lagos & Abuja.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => {
+                  setEditingEvent(null);
+                  setEventForm({
+                    badge: 'UPCOMING SALON',
+                    date: 'NOV 20, 2026',
+                    time: '19:00 WAT',
+                    city: 'Lagos',
+                    location: 'Victoria Island, Lagos, Nigeria',
+                    title: '',
+                    description: '',
+                    accessStatus: 'Guest List & Reservation',
+                  });
+                  setEventModalOpen(true);
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+              >
+                <Plus size={14} /> Schedule New Event
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: '1 1 240px' }}>
+              <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+              <input
+                type="text"
+                placeholder="Search events by title, location, city..."
+                value={eventSearch}
+                onChange={(e) => setEventSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px 9px 34px',
+                  background: 'hsl(var(--background))',
+                  border: '1px solid hsl(var(--border))',
+                  fontSize: 12,
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+              {['All', 'Lagos', 'Abuja', 'Lagos & Abuja'].map((cty) => (
+                <button
+                  key={cty}
+                  type="button"
+                  className={`admin-subnav-pill ${eventCityFilter === cty ? 'active' : ''}`}
+                  onClick={() => setEventCityFilter(cty)}
+                >
+                  {cty}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Events Content Table */}
+          {events.length === 0 ? (
+            <div className="empty-state" style={{ padding: '60px 20px', textAlign: 'center' }}>
+              <div className="eyebrow accent" style={{ marginBottom: 10 }}>No Scheduled Presentations</div>
+              <h3 className="display" style={{ fontSize: 22 }}>NO UPCOMING EXPERIENCES</h3>
+              <p className="muted" style={{ maxWidth: 440, margin: '8px auto 20px', fontSize: 12, lineHeight: 1.6 }}>
+                The public events page currently displays the empty state. Schedule salon showings, private previews, or runway exhibitions here.
+              </p>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => {
+                  setEditingEvent(null);
+                  setEventForm({
+                    badge: 'UPCOMING SALON',
+                    date: 'NOV 15, 2026',
+                    time: '19:00 WAT',
+                    city: 'Lagos',
+                    location: 'Victoria Island, Lagos, Nigeria',
+                    title: 'DIRACE SALON 04: MONOCHROME & SOUND',
+                    description: 'An evening preview of forthcoming caps, outerwear silhouettes, and raw denim accompanied by a live ambient audio installation.',
+                    accessStatus: 'Guest List & Reservation',
+                  });
+                  setEventModalOpen(true);
+                }}
+                style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={14} /> Schedule First Studio Event
+              </button>
+            </div>
+          ) : (
+            <div className="table-overflow">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Badge / City</th>
+                    <th>Experience Title</th>
+                    <th>Location & Access</th>
+                    <th>Description</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events
+                    .filter((ev) => {
+                      const matchSearch =
+                        !eventSearch ||
+                        ev.title.toLowerCase().includes(eventSearch.toLowerCase()) ||
+                        ev.location.toLowerCase().includes(eventSearch.toLowerCase()) ||
+                        ev.city.toLowerCase().includes(eventSearch.toLowerCase());
+                      const matchCity =
+                        eventCityFilter === 'All' || ev.city === eventCityFilter;
+                      return matchSearch && matchCity;
+                    })
+                    .map((ev) => (
+                      <tr key={ev.id}>
+                        <td>
+                          <div className="mono" style={{ fontSize: 12, fontWeight: 700 }}>
+                            {ev.date}
+                          </div>
+                          <div className="mono muted" style={{ fontSize: 10 }}>
+                            {ev.time}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="event-badge" style={{ display: 'inline-block', marginBottom: 4 }}>
+                            {ev.badge}
+                          </span>
+                          <div className="mono muted" style={{ fontSize: 10 }}>{ev.city}</div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: 12, textTransform: 'uppercase' }}>
+                            {ev.title}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <MapPin size={11} className="accent" />
+                            <span>{ev.location}</span>
+                          </div>
+                          <div className="mono muted" style={{ fontSize: 10, marginTop: 2 }}>
+                            {ev.accessStatus}
+                          </div>
+                        </td>
+                        <td style={{ fontSize: 12, maxWidth: 260, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
+                          {ev.description}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: 6 }}>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Edit studio event"
+                              onClick={() => {
+                                setEditingEvent(ev);
+                                setEventForm({
+                                  badge: ev.badge,
+                                  date: ev.date,
+                                  time: ev.time,
+                                  city: ev.city,
+                                  location: ev.location,
+                                  title: ev.title,
+                                  description: ev.description,
+                                  accessStatus: ev.accessStatus,
+                                });
+                                setEventModalOpen(true);
+                              }}
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              title="Delete studio event"
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: 'event',
+                                  id: ev.id,
+                                  name: `${ev.badge} (${ev.title})`,
+                                })
+                              }
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ARCHIVE RECORD MODAL (ADD / EDIT) */}
+      {archiveModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 24,
+          }}
+          onClick={() => setArchiveModalOpen(false)}
+        >
+          <div
+            style={{
+              background: 'hsl(var(--background))',
+              border: '1px solid hsl(var(--border))',
+              padding: 32,
+              maxWidth: 540,
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.28)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="eyebrow accent">{editingArchive ? 'Edit Archive' : 'New Archive'}</div>
+              <button className="icon-btn" onClick={() => setArchiveModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <h3 className="display" style={{ fontSize: 24, margin: '0 0 20px' }}>
+              {editingArchive ? 'UPDATE ARCHIVAL RECORD' : 'LOG ARCHIVE PIECE'}
+            </h3>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setIsSavingArchive(true);
+                try {
+                  if (editingArchive) {
+                    await updateArchive(editingArchive.id, archiveForm);
+                  } else {
+                    await addArchive(archiveForm);
+                  }
+                  setArchiveModalOpen(false);
+                } finally {
+                  setIsSavingArchive(false);
+                }
+              }}
+              style={{ display: 'grid', gap: 14 }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="field">
+                  <label>Archive Code *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VOL 01 // 001"
+                    value={archiveForm.code}
+                    onChange={(e) => setArchiveForm({ ...archiveForm, code: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Volume / Collection *</label>
+                  <select
+                    value={archiveForm.volume}
+                    onChange={(e) => setArchiveForm({ ...archiveForm, volume: e.target.value })}
+                  >
+                    <option value="Volume 01">Volume 01</option>
+                    <option value="Volume 02">Volume 02</option>
+                    <option value="Volume 03">Volume 03</option>
+                    <option value="Capsule X">Capsule X</option>
+                    <option value="Permanent Archive">Permanent Archive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Silhouette Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="THE MONOLITH OVERCOAT"
+                  value={archiveForm.title}
+                  onChange={(e) => setArchiveForm({ ...archiveForm, title: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="field">
+                  <label>Season *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Autumn / Winter 2026"
+                    value={archiveForm.season}
+                    onChange={(e) => setArchiveForm({ ...archiveForm, season: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Status Badge *</label>
+                  <select
+                    value={archiveForm.status}
+                    onChange={(e) => setArchiveForm({ ...archiveForm, status: e.target.value })}
+                  >
+                    <option value="Permanent Archive">Permanent Archive</option>
+                    <option value="Prototype Vault">Prototype Vault</option>
+                    <option value="Study Retrospective">Study Retrospective</option>
+                    <option value="Studio Benchmark">Studio Benchmark</option>
+                    <option value="Vault Limited">Vault Limited</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Materials Specification *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="680gsm Raw Traceable Wool · Lagos Wash"
+                  value={archiveForm.materials}
+                  onChange={(e) => setArchiveForm({ ...archiveForm, materials: e.target.value })}
+                />
+              </div>
+
+              <div className="field">
+                <label>Description / Design Rationale *</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Architectural notes, cut rationale, and construction details..."
+                  value={archiveForm.description}
+                  onChange={(e) => setArchiveForm({ ...archiveForm, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setArchiveModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={isSavingArchive}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {isSavingArchive && <Loader2 size={13} className="animate-spin" />}
+                  {editingArchive ? 'Save Changes' : 'Publish Archive Record'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* STUDIO EVENT MODAL (ADD / EDIT) */}
+      {eventModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 24,
+          }}
+          onClick={() => setEventModalOpen(false)}
+        >
+          <div
+            style={{
+              background: 'hsl(var(--background))',
+              border: '1px solid hsl(var(--border))',
+              padding: 32,
+              maxWidth: 540,
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.28)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="eyebrow accent">{editingEvent ? 'Edit Event' : 'New Presentation'}</div>
+              <button className="icon-btn" onClick={() => setEventModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <h3 className="display" style={{ fontSize: 24, margin: '0 0 20px' }}>
+              {editingEvent ? 'UPDATE STUDIO EXPERIENCE' : 'SCHEDULE STUDIO EVENT'}
+            </h3>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setIsSavingEvent(true);
+                try {
+                  if (editingEvent) {
+                    await updateEvent(editingEvent.id, eventForm);
+                  } else {
+                    await addEvent(eventForm);
+                  }
+                  setEventModalOpen(false);
+                } finally {
+                  setIsSavingEvent(false);
+                }
+              }}
+              style={{ display: 'grid', gap: 14 }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="field">
+                  <label>Event Badge *</label>
+                  <select
+                    value={eventForm.badge}
+                    onChange={(e) => setEventForm({ ...eventForm, badge: e.target.value })}
+                  >
+                    <option value="UPCOMING SALON">UPCOMING SALON</option>
+                    <option value="PRIVATE PREVIEW">PRIVATE PREVIEW</option>
+                    <option value="POP-UP SALON">POP-UP SALON</option>
+                    <option value="STUDIO TRUNK SHOW">STUDIO TRUNK SHOW</option>
+                    <option value="RUNWAY INSTALLATION">RUNWAY INSTALLATION</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>City *</label>
+                  <select
+                    value={eventForm.city}
+                    onChange={(e) => setEventForm({ ...eventForm, city: e.target.value })}
+                  >
+                    <option value="Lagos">Lagos</option>
+                    <option value="Abuja">Abuja</option>
+                    <option value="Lagos & Abuja">Lagos & Abuja</option>
+                    <option value="International">International</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Event Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="DIRACE SALON 04: MONOCHROME & SOUND"
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="field">
+                  <label>Date *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="NOV 15, 2026"
+                    value={eventForm.date}
+                    onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Time *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="19:00 WAT"
+                    value={eventForm.time}
+                    onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Specific Location / Venue *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Victoria Island, Lagos, Nigeria"
+                  value={eventForm.location}
+                  onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
+                />
+              </div>
+
+              <div className="field">
+                <label>Admission / Access Status *</label>
+                <select
+                  value={eventForm.accessStatus}
+                  onChange={(e) => setEventForm({ ...eventForm, accessStatus: e.target.value })}
+                >
+                  <option value="Guest List & Reservation">Guest List & Reservation</option>
+                  <option value="RSVP Required">RSVP Required</option>
+                  <option value="Invitation Only">Invitation Only</option>
+                  <option value="Client Suite Reservation">Client Suite Reservation</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Event Description *</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Presentation summary, capsule preview notes, audio-visual installation details..."
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setEventModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={isSavingEvent}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {isSavingEvent && <Loader2 size={13} className="animate-spin" />}
+                  {editingEvent ? 'Save Changes' : 'Schedule Event'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* IN-APP DELETION CONFIRMATION DIALOG (IFRAME-SAFE) */}
       {deleteConfirm && (
         <div
@@ -5983,7 +7148,7 @@ function Admin() {
               DELETE PERMANENTLY?
             </h3>
             <p style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 24px', color: 'hsl(var(--foreground))' }}>
-              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove {deleteConfirm.type === 'piece' ? 'this catalog piece' : deleteConfirm.type === 'order' ? 'this order record' : deleteConfirm.type === 'all-orders' ? 'all client order records' : 'this client reflection'}.
+              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove {deleteConfirm.type === 'piece' ? 'this catalog piece' : deleteConfirm.type === 'order' ? 'this order record' : deleteConfirm.type === 'all-orders' ? 'all client order records' : deleteConfirm.type === 'archive' ? 'this archival record' : deleteConfirm.type === 'event' ? 'this studio experience' : 'this client reflection'}.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button
@@ -6048,26 +7213,36 @@ function Router({
   onQty: (index: number, delta: number) => void;
   onRemove: (index: number) => void;
 }) {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [location]);
+
   return (
     <RoutedErrorBoundary>
-      <Switch>
-        <Route path="/" component={() => <Home wishlist={wishlist} onToggleWish={onToggleWish} />} />
-        <Route path="/shop" component={() => <Shop wishlist={wishlist} onToggleWish={onToggleWish} />} />
-        <Route
-          path="/product/:id"
-          component={() => <ProductDetail wishlist={wishlist} onToggleWish={onToggleWish} onAdd={onAdd} />}
-        />
-        <Route path="/collections" component={Collections} />
-        <Route path="/about" component={About} />
-        <Route path="/contact" component={Contact} />
-        <Route path="/wishlist" component={() => <Wishlist wishlist={wishlist} onToggleWish={onToggleWish} />} />
-        <Route path="/cart" component={() => <Cart items={items} onQty={onQty} onRemove={onRemove} />} />
-        <Route path="/checkout" component={() => <Checkout items={items} />} />
-        <Route path="/search" component={() => <SearchPage wishlist={wishlist} onToggleWish={onToggleWish} />} />
-        <Route path="/account" component={Account} />
-        <Route path="/admin" component={Admin} />
-        <Route component={NotFound} />
-      </Switch>
+      <div key={location} className="page-transition-wrapper">
+        <Switch>
+          <Route path="/" component={() => <Home wishlist={wishlist} onToggleWish={onToggleWish} />} />
+          <Route path="/shop" component={() => <Shop wishlist={wishlist} onToggleWish={onToggleWish} />} />
+          <Route
+            path="/product/:id"
+            component={() => <ProductDetail wishlist={wishlist} onToggleWish={onToggleWish} onAdd={onAdd} />}
+          />
+          <Route path="/archives" component={Archives} />
+          <Route path="/events" component={Events} />
+          <Route path="/collections" component={Archives} />
+          <Route path="/contact" component={Events} />
+          <Route path="/about" component={About} />
+          <Route path="/wishlist" component={() => <Wishlist wishlist={wishlist} onToggleWish={onToggleWish} />} />
+          <Route path="/cart" component={() => <Cart items={items} onQty={onQty} onRemove={onRemove} />} />
+          <Route path="/checkout" component={() => <Checkout items={items} />} />
+          <Route path="/search" component={() => <SearchPage wishlist={wishlist} onToggleWish={onToggleWish} />} />
+          <Route path="/account" component={Account} />
+          <Route path="/admin" component={Admin} />
+          <Route component={NotFound} />
+        </Switch>
+      </div>
     </RoutedErrorBoundary>
   );
 }
@@ -6084,6 +7259,95 @@ function App() {
   const [authModalMessage, setAuthModalMessage] = useState('');
   const [pendingAuthAction, setPendingAuthAction] = useState<(() => void) | null>(null);
 
+  // Persistent studio archives & events - clean slate initially (no dummy data)
+  const [archives, setArchives] = useState<ArchiveRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('dirace_studio_archives');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [events, setEvents] = useState<StudioEvent[]>(() => {
+    try {
+      const saved = localStorage.getItem('dirace_studio_events');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const addArchive = async (recordInput: Omit<ArchiveRecord, 'id'>) => {
+    const newRecord: ArchiveRecord = {
+      ...recordInput,
+      id: `arch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setArchives((prev) => {
+      const updated = [newRecord, ...prev];
+      try {
+        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    return newRecord;
+  };
+
+  const updateArchive = async (id: string, updates: Partial<ArchiveRecord>) => {
+    setArchives((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
+      try {
+        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const deleteArchive = async (id: string) => {
+    setArchives((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const addEvent = async (eventInput: Omit<StudioEvent, 'id'>) => {
+    const newEvent: StudioEvent = {
+      ...eventInput,
+      id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setEvents((prev) => {
+      const updated = [newEvent, ...prev];
+      try {
+        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    return newEvent;
+  };
+
+  const updateEvent = async (id: string, updates: Partial<StudioEvent>) => {
+    setEvents((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
+      try {
+        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const deleteEvent = async (id: string) => {
+    setEvents((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   const openAuthModal = (message?: string, onSuccess?: () => void) => {
     setAuthModalMessage(message || 'Please create an account or sign in to continue.');
     setPendingAuthAction(onSuccess ? () => onSuccess : null);
@@ -6099,7 +7363,6 @@ function App() {
     if (pendingAuthAction) {
       const action = pendingAuthAction;
       setPendingAuthAction(null);
-      // Small timeout to allow user state propagation
       setTimeout(() => {
         action();
       }, 100);
@@ -6159,7 +7422,6 @@ function App() {
       const u = await getSupabaseCurrentUser();
       setCurrentUser(u);
       if (u) {
-        // Load user-specific wishlist and cart
         try {
           const savedWish = localStorage.getItem(`dirace_wishlist_${u.id}`);
           if (savedWish) setWishlist(JSON.parse(savedWish));
@@ -6282,6 +7544,14 @@ function App() {
           refreshReviews,
           addReview,
           deleteReview,
+          archives,
+          addArchive,
+          updateArchive,
+          deleteArchive,
+          events,
+          addEvent,
+          updateEvent,
+          deleteEvent,
           currentUser,
           refreshUser,
           quickViewProduct,
