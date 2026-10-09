@@ -86,55 +86,21 @@ import {
   type Order,
   type Review,
   DEFAULT_PRODUCTS,
+  type CarouselSlide,
+  type ArchiveRecord,
+  type StudioEvent,
+  DEFAULT_CAROUSEL_SLIDES,
+  fetchCarouselSlidesOnline,
+  saveCarouselSlidesOnline,
+  fetchArchivesOnline,
+  saveArchivesOnline,
+  fetchEventsOnline,
+  saveEventsOnline,
 } from './lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
 export type CartItem = { productId: string; size: string; quantity: number };
-
-export interface ArchiveRecord {
-  id: string;
-  code: string;
-  volume: string;
-  title: string;
-  season: string;
-  status: string;
-  description: string;
-  materials: string;
-}
-
-export interface StudioEvent {
-  id: string;
-  badge: string;
-  date: string;
-  city: string;
-  title: string;
-  time: string;
-  location: string;
-  description: string;
-  accessStatus: string;
-}
-
-export interface CarouselSlide {
-  id: string;
-  image: string;
-  alt: string;
-  title?: string;
-}
-
-export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
-  {
-    id: 'carousel-slide-1',
-    image: '/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg',
-    alt: 'DIRACE Drop Look 01',
-    title: 'Drop Look 01',
-  },
-  {
-    id: 'carousel-slide-2',
-    image: '/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg',
-    alt: 'DIRACE Drop Look 02',
-    title: 'Drop Look 02',
-  },
-];
+export type { ArchiveRecord, StudioEvent, CarouselSlide };
 
 interface StoreContextType {
   products: Product[];
@@ -8225,7 +8191,7 @@ function App() {
     }
   });
 
-  // Persistent Hero Carousel Slides - Editable via Admin
+  // Persistent Hero Carousel Slides - Editable via Admin & Synced Online
   const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>(() => {
     try {
       const saved = localStorage.getItem('dirace_carousel_slides');
@@ -8239,58 +8205,65 @@ function App() {
     }
   });
 
+  // Pull latest persistent online content from Supabase Storage & API on mount (works on any device)
+  useEffect(() => {
+    let isMounted = true;
+    async function syncOnlineContent() {
+      try {
+        const [onlineSlides, onlineArchives, onlineEvents] = await Promise.all([
+          fetchCarouselSlidesOnline(),
+          fetchArchivesOnline(),
+          fetchEventsOnline(),
+        ]);
+        if (isMounted) {
+          if (onlineSlides && onlineSlides.length > 0) setCarouselSlides(onlineSlides);
+          if (Array.isArray(onlineArchives) && onlineArchives.length > 0) setArchives(onlineArchives);
+          if (Array.isArray(onlineEvents) && onlineEvents.length > 0) setEvents(onlineEvents);
+        }
+      } catch (err) {
+        console.warn('Background online sync note:', err);
+      }
+    }
+    syncOnlineContent();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const addCarouselSlide = async (slideInput: Omit<CarouselSlide, 'id'>) => {
     const newSlide: CarouselSlide = {
       ...slideInput,
       id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     };
-    setCarouselSlides((prev) => {
-      const updated = [...prev, newSlide];
-      try {
-        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = [...carouselSlides, newSlide];
+    setCarouselSlides(updated);
+    await saveCarouselSlidesOnline(updated);
     return newSlide;
   };
 
   const deleteCarouselSlide = async (id: string) => {
-    setCarouselSlides((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      try {
-        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = carouselSlides.filter((item) => item.id !== id);
+    setCarouselSlides(updated);
+    await saveCarouselSlidesOnline(updated);
   };
 
   const updateCarouselSlide = async (id: string, updates: Partial<CarouselSlide>) => {
-    setCarouselSlides((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
-      try {
-        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = carouselSlides.map((item) => (item.id === id ? { ...item, ...updates } : item));
+    setCarouselSlides(updated);
+    await saveCarouselSlidesOnline(updated);
   };
 
   const reorderCarouselSlides = async (startIndex: number, endIndex: number) => {
-    setCarouselSlides((prev) => {
-      const result = Array.from(prev);
-      const [removed] = result.splice(startIndex, 1);
-      result.splice(endIndex, 0, removed);
-      try {
-        localStorage.setItem('dirace_carousel_slides', JSON.stringify(result));
-      } catch (e) {}
-      return result;
-    });
+    const result = Array.from(carouselSlides);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    setCarouselSlides(result);
+    await saveCarouselSlidesOnline(result);
   };
 
   const resetCarouselSlides = async () => {
     setCarouselSlides(DEFAULT_CAROUSEL_SLIDES);
-    try {
-      localStorage.setItem('dirace_carousel_slides', JSON.stringify(DEFAULT_CAROUSEL_SLIDES));
-    } catch (e) {}
+    await saveCarouselSlidesOnline(DEFAULT_CAROUSEL_SLIDES);
   };
 
   const addArchive = async (recordInput: Omit<ArchiveRecord, 'id'>) => {
@@ -8298,34 +8271,22 @@ function App() {
       ...recordInput,
       id: `arch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     };
-    setArchives((prev) => {
-      const updated = [newRecord, ...prev];
-      try {
-        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = [newRecord, ...archives];
+    setArchives(updated);
+    await saveArchivesOnline(updated);
     return newRecord;
   };
 
   const updateArchive = async (id: string, updates: Partial<ArchiveRecord>) => {
-    setArchives((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
-      try {
-        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = archives.map((item) => (item.id === id ? { ...item, ...updates } : item));
+    setArchives(updated);
+    await saveArchivesOnline(updated);
   };
 
   const deleteArchive = async (id: string) => {
-    setArchives((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      try {
-        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = archives.filter((item) => item.id !== id);
+    setArchives(updated);
+    await saveArchivesOnline(updated);
   };
 
   const addEvent = async (eventInput: Omit<StudioEvent, 'id'>) => {
@@ -8333,34 +8294,22 @@ function App() {
       ...eventInput,
       id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     };
-    setEvents((prev) => {
-      const updated = [newEvent, ...prev];
-      try {
-        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = [newEvent, ...events];
+    setEvents(updated);
+    await saveEventsOnline(updated);
     return newEvent;
   };
 
   const updateEvent = async (id: string, updates: Partial<StudioEvent>) => {
-    setEvents((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
-      try {
-        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = events.map((item) => (item.id === id ? { ...item, ...updates } : item));
+    setEvents(updated);
+    await saveEventsOnline(updated);
   };
 
   const deleteEvent = async (id: string) => {
-    setEvents((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      try {
-        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updated = events.filter((item) => item.id !== id);
+    setEvents(updated);
+    await saveEventsOnline(updated);
   };
 
   const openAuthModal = (message?: string, onSuccess?: () => void) => {
