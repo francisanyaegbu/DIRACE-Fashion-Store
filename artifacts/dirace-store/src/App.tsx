@@ -7,6 +7,10 @@ import {
   ArrowUpRight,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Play,
+  Pause,
   Heart,
   Menu,
   Minus,
@@ -107,6 +111,29 @@ export interface StudioEvent {
   accessStatus: string;
 }
 
+export interface CarouselSlide {
+  id: string;
+  image: string;
+  title?: string;
+  alt?: string;
+  created_at?: string;
+}
+
+export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
+  {
+    id: 'slide-1',
+    image: '/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg',
+    title: 'Drop Look 01 (Jacket & Cap)',
+    alt: 'DIRACE Drop Look 01',
+  },
+  {
+    id: 'slide-2',
+    image: '/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg',
+    title: 'Drop Look 02 (Dirace is Law Tee)',
+    alt: 'DIRACE Drop Look 02',
+  },
+];
+
 interface StoreContextType {
   products: Product[];
   refreshProducts: () => Promise<void>;
@@ -126,6 +153,11 @@ interface StoreContextType {
   addEvent: (event: Omit<StudioEvent, 'id'>) => Promise<StudioEvent>;
   updateEvent: (id: string, updates: Partial<StudioEvent>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
+  carouselSlides: CarouselSlide[];
+  addCarouselSlide: (slide: Omit<CarouselSlide, 'id'>) => Promise<CarouselSlide>;
+  removeCarouselSlide: (id: string) => Promise<void>;
+  updateCarouselSlide: (id: string, updates: Partial<CarouselSlide>) => Promise<void>;
+  resetCarouselSlides: () => Promise<void>;
   currentUser: User | null;
   refreshUser: () => Promise<void>;
   quickViewProduct: Product | null;
@@ -158,6 +190,11 @@ const StoreContext = createContext<StoreContextType>({
   addEvent: async () => ({} as StudioEvent),
   updateEvent: async () => {},
   deleteEvent: async () => {},
+  carouselSlides: [],
+  addCarouselSlide: async () => ({} as CarouselSlide),
+  removeCarouselSlide: async () => {},
+  updateCarouselSlide: async () => {},
+  resetCarouselSlides: async () => {},
   currentUser: null,
   refreshUser: async () => {},
   quickViewProduct: null,
@@ -1175,170 +1212,103 @@ function CatalogNotice({
   );
 }
 
-function Home({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
-  const { products } = useStore();
+function HeroCarousel() {
+  const { carouselSlides } = useStore();
+  const slides = carouselSlides && carouselSlides.length > 0 ? carouselSlides : DEFAULT_CAROUSEL_SLIDES;
+  const [current, setCurrent] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+
+  const safeIndex = current >= slides.length ? 0 : current;
+
+  const prevSlide = () => {
+    setCurrent((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  const nextSlide = () => {
+    setCurrent((prev) => (prev + 1) % slides.length);
+  };
+
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % slides.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [safeIndex, slides.length]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStart === null) return;
+    const touchEnd = e.changedTouches[0].clientX;
+    const diff = touchStart - touchEnd;
+    if (diff > 50) nextSlide();
+    if (diff < -50) prevSlide();
+    setTouchStart(null);
+  };
 
   return (
-    <main>
-      <section className="hero">
-        <div className="hero-copy reveal">
-          <div>
-            <div className="eyebrow accent">Collection 01 / 25</div>
-            <h1 className="display">
-              DEFINE
-              <br />
-              YOUR OWN
-              <br />
-              <span className="accent">STANDARD.</span>
-            </h1>
-          </div>
-          <div>
-            <p>DIRACE is a uniform for the self-defined. Considered shapes, uncompromising materials, no borrowed ideas.</p>
-            <div className="hero-note">
-              <span>THE NEW STANDARD</span>
-              <Link href="/shop" className="circle-arrow" aria-label="Shop the latest drop" data-testid="link-hero-shop">
-                <ArrowRight size={17} />
-              </Link>
+    <section
+      className="hero-carousel"
+      aria-label="DIRACE Latest Drops"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Slides */}
+      {slides.map((slide, index) => {
+        const isActive = index === safeIndex;
+        return (
+          <div
+            key={slide.id}
+            className={`hero-carousel-slide ${isActive ? 'active' : ''}`}
+            aria-hidden={!isActive}
+          >
+            <div className="hero-carousel-img-wrap">
+              <img
+                src={slide.image}
+                alt={slide.alt || slide.title || 'DIRACE Latest Drops'}
+                className="hero-carousel-img"
+                loading={index === 0 ? 'eager' : 'lazy'}
+              />
             </div>
+            <div className="hero-carousel-scrim" />
           </div>
-        </div>
-        <div className="hero-image reveal delay-2">
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle="CAMPAIGN VISUALS IN PRODUCTION"
-            style={{ height: '100%', minHeight: '100%', border: 'none' }}
-          />
-        </div>
-      </section>
-      <div className="marquee">
-        <div className="marquee-track">
-          <span>DIRACE IS LAW</span>
-          <span className="dot">·</span>
-          <span>DIRACE IS LAW</span>
-          <span className="dot">·</span>
-          <span>DIRACE IS LAW</span>
-          <span className="dot">·</span>
-          <span>DIRACE IS LAW</span>
-          <span className="dot">·</span>
-          <span>DIRACE IS LAW</span>
-          <span className="dot">·</span>
-          <span>DIRACE IS LAW</span>
-          <span className="dot">·</span>
-          <span>DIRACE IS LAW</span>
-          <span className="dot">·</span>
-          <span>DIRACE IS LAW</span>
+        );
+      })}
+
+      {/* Centerpiece Text & Quick Action Buttons */}
+      <div className="hero-carousel-center">
+        <h1 className="hero-carousel-center-text" data-testid="text-carousel-heading">
+          dirace latest drops
+        </h1>
+        <div className="hero-carousel-center-actions">
+          <Link
+            href="/shop"
+            className="hero-carousel-btn-primary"
+            data-testid="link-hero-shop-drops"
+          >
+            <span>Explore Drops</span>
+            <ArrowRight size={15} />
+          </Link>
+          <Link
+            href="/about"
+            className="hero-carousel-btn-secondary"
+            data-testid="link-hero-about-drops"
+          >
+            <span>Our Story</span>
+          </Link>
         </div>
       </div>
-      <section className="section page-wrap">
-        <div className="section-head">
-          <div>
-            <div className="eyebrow accent">01 / The edit</div>
-            <h2 className="display section-title">
-              THE LATEST
-              <br />
-              DROP
-            </h2>
-          </div>
-          <div className="section-copy">
-            A considered collection for a life in motion. Prices in Nigerian Naira (₦).
-            <br />
-            <Link href="/shop" className="text-link" style={{ marginTop: 22 }} data-testid="link-shop-latest">
-              Shop the edit <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-        {products.length > 0 ? (
-          <div className="product-grid">
-            {products.slice(0, 4).map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                isSaved={wishlist.includes(product.id)}
-                onToggleWish={onToggleWish}
-              />
-            ))}
-          </div>
-        ) : (
-          <CatalogNotice />
-        )}
-      </section>
-      <section className="manifesto">
-        <div className="page-wrap manifesto-inner">
-          <div>
-            <div className="eyebrow">A point of view</div>
-            <p>
-              We make pieces with a point of view, not a shelf life. Every seam has a reason. Every silhouette leaves room
-              for you.
-            </p>
-          </div>
-          <h2 className="display">
-            WEAR WHAT
-            <br />
-            <span className="accent">DEFINES YOU.</span>
-          </h2>
-        </div>
-      </section>
-      <section className="split-feature">
-        <div className="feature-image">
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle="THE FORM STUDY // ARCHIVE EMBARGO"
-            style={{ height: '100%', minHeight: '100%', border: 'none' }}
-          />
-        </div>
-        <div className="feature-copy">
-          <div>
-            <div className="feature-number">02 / THE FORM STUDY</div>
-            <h2 className="display">
-              CUT WITH
-              <br />
-              CONVICTION.
-            </h2>
-          </div>
-          <div>
-            <p>
-              Our first study in tailoring: softened structure, severe proportions, and the kind of cloth that remembers
-              where you have been.
-            </p>
-            <Link href="/archives" className="text-link" data-testid="link-form-study">
-              Explore the archives <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-      </section>
-      <section className="section page-wrap">
-        <div className="section-head">
-          <div>
-            <div className="eyebrow accent">03 / Field notes</div>
-            <h2 className="display section-title">
-              THE WORLD
-              <br />
-              AROUND IT
-            </h2>
-          </div>
-          <div className="section-copy">
-            A look at the places, objects and people that make the DIRACE language.{' '}
-            <Link href="/about" className="text-link" style={{ marginTop: 22 }} data-testid="link-about-notes">
-              Read our story <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-        <div className="editorial-strip">
-          <div className="editorial-tile">
-            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="01 — TEXTURE" style={{ height: '100%', width: '100%' }} />
-            <span className="editorial-label">01 — Texture</span>
-          </div>
-          <div className="editorial-tile">
-            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="02 — MOVEMENT" style={{ height: '100%', width: '100%' }} />
-            <span className="editorial-label">02 — Movement</span>
-          </div>
-          <div className="editorial-tile">
-            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="03 — FORM" style={{ height: '100%', width: '100%' }} />
-            <span className="editorial-label">03 — Form</span>
-          </div>
-        </div>
-      </section>
-      <Signup />
+    </section>
+  );
+}
+
+function Home() {
+  return (
+    <main>
+      <HeroCarousel />
     </main>
   );
 }
@@ -2420,67 +2390,243 @@ function Archives() {
   );
 }
 
-function About() {
+function About({
+  wishlist = [],
+  onToggleWish = () => {},
+}: {
+  wishlist?: string[];
+  onToggleWish?: (id: string) => void;
+}) {
+  const { products } = useStore();
+
   return (
-    <main className="page-wrap">
-      <div className="page-header">
-        <div className="eyebrow accent">DIRACE / About</div>
-        <h1 className="display">
-          DIRACE —
-          <br />
-          DIFFERENT RACE
-        </h1>
+    <main>
+      {/* Editorial Header */}
+      <div className="page-wrap" style={{ paddingTop: 40, paddingBottom: 20 }}>
+        <div className="page-header" style={{ marginBottom: 40 }}>
+          <div className="eyebrow accent">DIRACE / House Identity & Philosophy</div>
+          <h1 className="display" style={{ marginTop: 8 }}>
+            DIRACE —
+            <br />
+            DIFFERENT RACE
+          </h1>
+        </div>
+
+        {/* Identity & Standard Grid */}
+        <div className="content-narrow">
+          <div className="about-grid">
+            <div>
+              <div className="eyebrow accent">Our standard</div>
+              <h2 className="display">
+                CLOTHING
+                <br />
+                AS IDENTITY.
+              </h2>
+            </div>
+            <div>
+              <p>
+                DIRACE is a clothing brand built on individuality, self-acceptance, and authentic self-expression.
+              </p>
+              <p>
+                Derived from “Different Race,” DIRACE represents those who embrace their own identity and choose to live by their own character. It’s about accepting who you are, owning your differences, and expressing your identity through what you wear.
+              </p>
+              <p>
+                DIRACE isn’t just clothing. It’s a mindset, an identity, and a way of life.
+              </p>
+              <p style={{ fontWeight: 700, letterSpacing: '0.08em', marginTop: 24, fontSize: '1.15rem' }}>
+                DIRACE IS LAW.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="content-narrow">
-        <div className="about-grid">
+
+      {/* Marquee Banner */}
+      <div className="marquee">
+        <div className="marquee-track">
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+          <span className="dot">·</span>
+          <span>DIRACE IS LAW</span>
+        </div>
+      </div>
+
+      {/* Collection 01 / 25 Architectural Ethos */}
+      <section className="section page-wrap">
+        <div className="hero-copy" style={{ padding: '40px 0', borderBottom: '1px solid hsl(var(--border))' }}>
           <div>
-            <div className="eyebrow accent">Our standard</div>
-            <h2 className="display">
-              CLOTHING
+            <div className="eyebrow accent">Collection 01 / 25 · Architectural Vision</div>
+            <h2 className="display" style={{ marginTop: 12, marginBottom: 20 }}>
+              DEFINE
               <br />
-              AS IDENTITY.
+              YOUR OWN
+              <br />
+              <span className="accent">STANDARD.</span>
+            </h2>
+          </div>
+          <div>
+            <p style={{ maxWidth: 480, fontSize: 14, lineHeight: 1.8 }}>
+              DIRACE is a uniform for the self-defined. Considered shapes, uncompromising materials, no borrowed ideas.
+            </p>
+            <div className="hero-note" style={{ marginTop: 24, maxWidth: 480 }}>
+              <span>THE NEW STANDARD</span>
+              <Link href="/shop" className="circle-arrow" aria-label="Shop the collection" data-testid="link-about-shop">
+                <ArrowRight size={17} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Curated Drop / The Edit */}
+      <section className="section page-wrap" style={{ paddingTop: 20 }}>
+        <div className="section-head">
+          <div>
+            <div className="eyebrow accent">01 / The edit</div>
+            <h2 className="display section-title">
+              THE LATEST
+              <br />
+              DROP
+            </h2>
+          </div>
+          <div className="section-copy">
+            A considered collection for a life in motion. Prices in Nigerian Naira (₦).
+            <br />
+            <Link href="/shop" className="text-link" style={{ marginTop: 22 }} data-testid="link-about-shop-latest">
+              Shop the edit <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+        {products.length > 0 ? (
+          <div className="product-grid">
+            {products.slice(0, 4).map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                isSaved={wishlist.includes(product.id)}
+                onToggleWish={onToggleWish}
+              />
+            ))}
+          </div>
+        ) : (
+          <CatalogNotice />
+        )}
+      </section>
+
+      {/* Manifesto Section */}
+      <section className="manifesto">
+        <div className="page-wrap manifesto-inner">
+          <div>
+            <div className="eyebrow">A point of view</div>
+            <p>
+              We make pieces with a point of view, not a shelf life. Every seam has a reason. Every silhouette leaves room
+              for you.
+            </p>
+          </div>
+          <h2 className="display">
+            WEAR WHAT
+            <br />
+            <span className="accent">DEFINES YOU.</span>
+          </h2>
+        </div>
+      </section>
+
+      {/* The Form Study (Split Feature) */}
+      <section className="split-feature">
+        <div className="feature-image">
+          <WatermarkImage
+            label="COMING SOON"
+            subtitle="THE FORM STUDY // ARCHIVE EMBARGO"
+            style={{ height: '100%', minHeight: '100%', border: 'none' }}
+          />
+        </div>
+        <div className="feature-copy">
+          <div>
+            <div className="feature-number">02 / THE FORM STUDY</div>
+            <h2 className="display">
+              CUT WITH
+              <br />
+              CONVICTION.
             </h2>
           </div>
           <div>
             <p>
-              DIRACE is a clothing brand built on individuality, self-acceptance, and authentic self-expression.
+              Our first study in tailoring: softened structure, severe proportions, and the kind of cloth that remembers
+              where you have been.
             </p>
-            <p>
-              Derived from “Different Race,” DIRACE represents those who embrace their own identity and choose to live by their own character. It’s about accepting who you are, owning your differences, and expressing your identity through what you wear.
-            </p>
-            <p>
-              DIRACE isn’t just clothing. It’s a mindset, an identity, and a way of life.
-            </p>
-            <p style={{ fontWeight: 700, letterSpacing: '0.08em', marginTop: 24, fontSize: '1.15rem' }}>
-              DIRACE IS LAW.
-            </p>
+            <Link href="/archives" className="text-link" data-testid="link-form-study">
+              Explore the archives <ArrowRight size={14} />
+            </Link>
           </div>
         </div>
-        <div style={{ marginTop: 90 }}>
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle="DIRACE PHILOSOPHY ARCHIVE // LAGOS & ABUJA"
-            aspectRatio="1.9"
-            style={{ width: '100%' }}
-          />
-        </div>
-        <div className="about-columns" style={{ marginTop: 80 }}>
-          <div>
-            <div className="eyebrow accent">01 — Materials</div>
-            <p className="muted" style={{ lineHeight: 1.8, fontSize: 13 }}>
-              Traceable wool. Dense cotton. Organic yarns. We select materials for how they age, not how they photograph on day
-              one.
-            </p>
-          </div>
-          <div>
-            <div className="eyebrow accent">02 — Making</div>
-            <p className="muted" style={{ lineHeight: 1.8, fontSize: 13 }}>
-              Small runs, close partners, clear standards. Good clothing is a conversation between a designer, a maker and the
-              person who wears it.
-            </p>
+      </section>
+
+      {/* Philosophy Pillars & Materials */}
+      <div className="page-wrap" style={{ margin: '80px auto' }}>
+        <div className="content-narrow">
+          <div className="about-columns">
+            <div>
+              <div className="eyebrow accent">01 — Materials</div>
+              <p className="muted" style={{ lineHeight: 1.8, fontSize: 13, marginTop: 8 }}>
+                Traceable wool. Dense cotton. Organic yarns. We select materials for how they age, not how they photograph on day
+                one.
+              </p>
+            </div>
+            <div>
+              <div className="eyebrow accent">02 — Making</div>
+              <p className="muted" style={{ lineHeight: 1.8, fontSize: 13, marginTop: 8 }}>
+                Small runs, close partners, clear standards. Good clothing is a conversation between a designer, a maker and the
+                person who wears it.
+              </p>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Field Notes (Editorial Strip) */}
+      <section className="section page-wrap">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow accent">03 / Field notes</div>
+            <h2 className="display section-title">
+              THE WORLD
+              <br />
+              AROUND IT
+            </h2>
+          </div>
+          <div className="section-copy">
+            A look at the places, objects and people that make the DIRACE language.
+          </div>
+        </div>
+        <div className="editorial-strip">
+          <div className="editorial-tile">
+            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="01 — TEXTURE" style={{ height: '100%', width: '100%' }} />
+            <span className="editorial-label">01 — Texture</span>
+          </div>
+          <div className="editorial-tile">
+            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="02 — MOVEMENT" style={{ height: '100%', width: '100%' }} />
+            <span className="editorial-label">02 — Movement</span>
+          </div>
+          <div className="editorial-tile">
+            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="03 — FORM" style={{ height: '100%', width: '100%' }} />
+            <span className="editorial-label">03 — Form</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Private Bulletin Newsletter Signup */}
+      <Signup />
     </main>
   );
 }
@@ -3536,8 +3682,12 @@ function Admin() {
     addEvent,
     updateEvent,
     deleteEvent,
+    carouselSlides,
+    addCarouselSlide,
+    removeCarouselSlide,
+    resetCarouselSlides,
   } = useStore();
-  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'reviews' | 'archives' | 'events'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'reviews' | 'archives' | 'events' | 'carousel'>('inventory');
 
   // Studio Admin Authentication States
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -3618,11 +3768,20 @@ function Admin() {
 
   // Delete Confirmation Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'piece' | 'order' | 'review' | 'all-orders' | 'archive' | 'event';
+    type: 'piece' | 'order' | 'review' | 'all-orders' | 'archive' | 'event' | 'carousel-slide';
     id: string;
     name: string;
   } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Carousel Management States
+  const [carouselModalOpen, setCarouselModalOpen] = useState(false);
+  const [carouselImageUrl, setCarouselImageUrl] = useState('');
+  const [carouselImageTitle, setCarouselImageTitle] = useState('');
+  const [carouselImageAlt, setCarouselImageAlt] = useState('');
+  const [isCarouselUploading, setIsCarouselUploading] = useState(false);
+  const [carouselUploadFeedback, setCarouselUploadFeedback] = useState<string | null>(null);
+  const [isSavingCarouselSlide, setIsSavingCarouselSlide] = useState(false);
 
   // Archives Management States
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
@@ -3962,12 +4121,57 @@ function Admin() {
         await deleteArchive(id);
       } else if (type === 'event') {
         await deleteEvent(id);
+      } else if (type === 'carousel-slide') {
+        await removeCarouselSlide(id);
       }
     } catch (err) {
       console.error('Deletion error:', err);
     } finally {
       setDeletingId(null);
       setDeleteConfirm(null);
+    }
+  };
+
+  const handleCarouselImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCarouselUploading(true);
+    setCarouselUploadFeedback('Uploading carousel image...');
+
+    try {
+      const res = await uploadProductImageToSupabase(file);
+      if (res.url) {
+        setCarouselImageUrl(res.url);
+        setCarouselUploadFeedback('Image uploaded to storage successfully!');
+      } else {
+        setCarouselUploadFeedback(res.error || 'Failed to upload image. Please try again.');
+      }
+    } catch (err: any) {
+      setCarouselUploadFeedback(err?.message || 'Error uploading image');
+    } finally {
+      setIsCarouselUploading(false);
+    }
+  };
+
+  const handleAddCarouselSlide = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!carouselImageUrl.trim()) return;
+
+    setIsSavingCarouselSlide(true);
+    try {
+      await addCarouselSlide({
+        image: carouselImageUrl.trim(),
+        title: carouselImageTitle.trim() || `Look ${carouselSlides.length + 1}`,
+        alt: carouselImageAlt.trim() || carouselImageTitle.trim() || 'DIRACE Carousel Slide',
+      });
+      setCarouselModalOpen(false);
+      setCarouselImageUrl('');
+      setCarouselImageTitle('');
+      setCarouselImageAlt('');
+      setCarouselUploadFeedback(null);
+    } finally {
+      setIsSavingCarouselSlide(false);
     }
   };
 
@@ -4502,6 +4706,22 @@ function Admin() {
             )}
           </span>
         </div>
+        <div
+          className="stat-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setActiveTab('carousel')}
+          title="Click to manage homepage carousel images"
+          style={{ cursor: 'pointer', transition: 'all .15s ease' }}
+          data-testid="stat-card-carousel"
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="eyebrow accent">Homepage Carousel</div>
+            <ArrowRight size={13} className="muted" />
+          </div>
+          <strong>{carouselSlides.length}</strong>
+          <span className="mono muted">Active hero slides &rarr;</span>
+        </div>
       </div>
 
       {/* Tab Switcher */}
@@ -4612,6 +4832,25 @@ function Admin() {
           onClick={() => setActiveTab('events')}
         >
           05 / Studio Events ({events.length})
+        </button>
+        <button
+          className={`mono ${activeTab === 'carousel' ? 'accent' : 'muted'}`}
+          style={{
+            background: 'none',
+            border: 0,
+            padding: '12px 4px',
+            borderBottom: activeTab === 'carousel' ? '2px solid hsl(var(--foreground))' : 'none',
+            fontWeight: activeTab === 'carousel' ? 600 : 400,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+          onClick={() => setActiveTab('carousel')}
+          data-testid="tab-admin-carousel"
+        >
+          06 / Carousel Slides ({carouselSlides.length})
         </button>
       </div>
 
@@ -6765,6 +7004,136 @@ function Admin() {
         </section>
       )}
 
+      {/* TAB 6: HOMEPAGE CAROUSEL SLIDES */}
+      {activeTab === 'carousel' && (
+        <section>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div className="eyebrow accent">Homepage Visual Direction</div>
+              <h2 className="display" style={{ fontSize: 32, margin: '4px 0' }}>
+                CAROUSEL SLIDES & HERO IMAGERY
+              </h2>
+              <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
+                Control which editorial campaign photographs rotate in the homepage hero carousel animation. Add new lookbook drops or delete old slides.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                style={{ fontSize: 12 }}
+                onClick={() => {
+                  if (window.confirm('Reset carousel slides to default initial drops?')) {
+                    resetCarouselSlides();
+                  }
+                }}
+                data-testid="button-reset-carousel"
+              >
+                Reset Initial Drops
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                onClick={() => {
+                  setCarouselImageUrl('');
+                  setCarouselImageTitle('');
+                  setCarouselImageAlt('');
+                  setCarouselUploadFeedback(null);
+                  setCarouselModalOpen(true);
+                }}
+                data-testid="button-add-carousel-slide"
+              >
+                <Plus size={14} /> Add Carousel Image
+              </button>
+            </div>
+          </div>
+
+          {carouselSlides.length === 0 ? (
+            <div className="empty-state" style={{ marginTop: 40, padding: '60px 24px' }}>
+              <h3 className="display" style={{ fontSize: 20 }}>NO CAROUSEL SLIDES ACTIVE</h3>
+              <p className="muted" style={{ fontSize: 13, maxWidth: 420, margin: '10px auto 20px' }}>
+                All carousel images have been removed. Add a new image or restore the default initial drops so the homepage displays visuals.
+              </p>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={resetCarouselSlides}
+              >
+                Restore Initial Drops
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 24, marginTop: 20 }}>
+              {carouselSlides.map((slide, index) => (
+                <div
+                  key={slide.id}
+                  style={{
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(var(--card))',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  }}
+                  data-testid={`carousel-slide-card-${index}`}
+                >
+                  <div style={{ position: 'relative', width: '100%', height: 320, background: '#000', overflow: 'hidden' }}>
+                    <img
+                      src={slide.image}
+                      alt={slide.alt || slide.title || 'Slide Image'}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: 10,
+                        background: 'rgba(0,0,0,0.75)',
+                        color: '#fff',
+                        font: '10px var(--app-font-mono)',
+                        padding: '4px 8px',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        borderRadius: 2,
+                      }}
+                    >
+                      Slide {String(index + 1).padStart(2, '0')}
+                    </div>
+                  </div>
+                  <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: 14, fontWeight: 600 }}>
+                        {slide.title || `Editorial Look ${index + 1}`}
+                      </h4>
+                      <p className="mono muted" style={{ fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={slide.image}>
+                        {slide.image}
+                      </p>
+                    </div>
+                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid hsl(var(--border))', paddingTop: 12 }}>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        style={{ fontSize: 11, padding: '6px 12px', color: 'hsl(0 75% 45%)', borderColor: 'hsl(0 75% 45% / 0.3)' }}
+                        onClick={() => {
+                          setDeleteConfirm({
+                            type: 'carousel-slide',
+                            id: slide.id,
+                            name: slide.title || `Slide ${index + 1}`,
+                          });
+                        }}
+                        data-testid={`button-delete-slide-${index}`}
+                      >
+                        <Trash2 size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Remove Image
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ARCHIVE RECORD MODAL (ADD / EDIT) */}
       {archiveModalOpen && (
         <div
@@ -7111,6 +7480,190 @@ function Admin() {
         </div>
       )}
 
+      {/* ADD CAROUSEL SLIDE MODAL */}
+      {carouselModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 24,
+          }}
+          onClick={() => setCarouselModalOpen(false)}
+        >
+          <div
+            style={{
+              background: 'hsl(var(--background))',
+              border: '1px solid hsl(var(--border))',
+              maxWidth: 540,
+              width: '100%',
+              padding: 28,
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.28)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="eyebrow accent">Homepage Visuals</div>
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => setCarouselModalOpen(false)}
+                aria-label="Close modal"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <h3 className="display" style={{ fontSize: 24, margin: '0 0 20px' }}>
+              ADD CAROUSEL IMAGE
+            </h3>
+
+            <form onSubmit={handleAddCarouselSlide} style={{ display: 'grid', gap: 14 }}>
+              <div className="field">
+                <label>Upload From Device</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCarouselImageUpload}
+                  disabled={isCarouselUploading}
+                  style={{ fontSize: 12, padding: 8, border: '1px dashed hsl(var(--border))' }}
+                />
+                {carouselUploadFeedback && (
+                  <p className="mono accent" style={{ fontSize: 11, marginTop: 4 }}>
+                    {carouselUploadFeedback}
+                  </p>
+                )}
+              </div>
+
+              <div className="field">
+                <label>Or Paste Image URL *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="https://... or /image.jpg"
+                  value={carouselImageUrl}
+                  onChange={(e) => setCarouselImageUrl(e.target.value)}
+                  data-testid="input-carousel-image-url"
+                />
+              </div>
+
+              <div className="field">
+                <label style={{ marginBottom: 4, display: 'block' }}>Quick Presets (Click to Select)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    style={{ fontSize: 10, padding: '4px 8px' }}
+                    onClick={() => {
+                      setCarouselImageUrl('/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg');
+                      setCarouselImageTitle('Drop Look 01 (Jacket & Cap)');
+                    }}
+                  >
+                    WhatsApp Look 01
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    style={{ fontSize: 10, padding: '4px 8px' }}
+                    onClick={() => {
+                      setCarouselImageUrl('/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg');
+                      setCarouselImageTitle('Drop Look 02 (Dirace is Law Tee)');
+                    }}
+                  >
+                    WhatsApp Look 02
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    style={{ fontSize: 10, padding: '4px 8px' }}
+                    onClick={() => {
+                      setCarouselImageUrl('/dirace-hero.jpg');
+                      setCarouselImageTitle('Campaign Lookbook 01');
+                    }}
+                  >
+                    Campaign Editorial
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    style={{ fontSize: 10, padding: '4px 8px' }}
+                    onClick={() => {
+                      setCarouselImageUrl('/dirace-look-02.jpg');
+                      setCarouselImageTitle('Study 02 (Tailoring & Drape)');
+                    }}
+                  >
+                    Study 02
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    style={{ fontSize: 10, padding: '4px 8px' }}
+                    onClick={() => {
+                      setCarouselImageUrl('/dirace-look-03.jpg');
+                      setCarouselImageTitle('Study 03 (Monochrome Form)');
+                    }}
+                  >
+                    Study 03
+                  </button>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Slide Label / Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Drop Look 03 - Oversized Tee"
+                  value={carouselImageTitle}
+                  onChange={(e) => setCarouselImageTitle(e.target.value)}
+                  data-testid="input-carousel-image-title"
+                />
+              </div>
+
+              {carouselImageUrl && (
+                <div style={{ marginTop: 6, marginBottom: 8, border: '1px solid hsl(var(--border))', padding: 8, background: '#000' }}>
+                  <div className="mono muted" style={{ fontSize: 10, color: '#aaa', marginBottom: 6 }}>IMAGE PREVIEW:</div>
+                  <img
+                    src={carouselImageUrl}
+                    alt="Preview"
+                    style={{ maxHeight: 180, width: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setCarouselModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={!carouselImageUrl.trim() || isSavingCarouselSlide || isCarouselUploading}
+                  data-testid="button-submit-carousel-slide"
+                >
+                  {isSavingCarouselSlide ? 'Adding...' : 'Add Slide to Carousel'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* IN-APP DELETION CONFIRMATION DIALOG (IFRAME-SAFE) */}
       {deleteConfirm && (
         <div
@@ -7148,7 +7701,7 @@ function Admin() {
               DELETE PERMANENTLY?
             </h3>
             <p style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 24px', color: 'hsl(var(--foreground))' }}>
-              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove {deleteConfirm.type === 'piece' ? 'this catalog piece' : deleteConfirm.type === 'order' ? 'this order record' : deleteConfirm.type === 'all-orders' ? 'all client order records' : deleteConfirm.type === 'archive' ? 'this archival record' : deleteConfirm.type === 'event' ? 'this studio experience' : 'this client reflection'}.
+              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove {deleteConfirm.type === 'piece' ? 'this catalog piece' : deleteConfirm.type === 'order' ? 'this order record' : deleteConfirm.type === 'all-orders' ? 'all client order records' : deleteConfirm.type === 'archive' ? 'this archival record' : deleteConfirm.type === 'event' ? 'this studio experience' : deleteConfirm.type === 'carousel-slide' ? 'this homepage carousel slide' : 'this client reflection'}.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button
@@ -7223,7 +7776,7 @@ function Router({
     <RoutedErrorBoundary>
       <div key={location} className="page-transition-wrapper">
         <Switch>
-          <Route path="/" component={() => <Home wishlist={wishlist} onToggleWish={onToggleWish} />} />
+          <Route path="/" component={Home} />
           <Route path="/shop" component={() => <Shop wishlist={wishlist} onToggleWish={onToggleWish} />} />
           <Route
             path="/product/:id"
@@ -7233,7 +7786,7 @@ function Router({
           <Route path="/events" component={Events} />
           <Route path="/collections" component={Archives} />
           <Route path="/contact" component={Events} />
-          <Route path="/about" component={About} />
+          <Route path="/about" component={() => <About wishlist={wishlist} onToggleWish={onToggleWish} />} />
           <Route path="/wishlist" component={() => <Wishlist wishlist={wishlist} onToggleWish={onToggleWish} />} />
           <Route path="/cart" component={() => <Cart items={items} onQty={onQty} onRemove={onRemove} />} />
           <Route path="/checkout" component={() => <Checkout items={items} />} />
@@ -7346,6 +7899,63 @@ function App() {
       } catch (e) {}
       return updated;
     });
+  };
+
+  // Persistent carousel slides with default initial drop photos
+  const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>(() => {
+    try {
+      const saved = localStorage.getItem('dirace_carousel_slides');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_CAROUSEL_SLIDES;
+  });
+
+  const addCarouselSlide = async (slideInput: Omit<CarouselSlide, 'id'>) => {
+    const newSlide: CarouselSlide = {
+      ...slideInput,
+      id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      created_at: new Date().toISOString(),
+    };
+    setCarouselSlides((prev) => {
+      const updated = [...prev, newSlide];
+      try {
+        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    return newSlide;
+  };
+
+  const removeCarouselSlide = async (id: string) => {
+    setCarouselSlides((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const updateCarouselSlide = async (id: string, updates: Partial<CarouselSlide>) => {
+    setCarouselSlides((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
+      try {
+        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const resetCarouselSlides = async () => {
+    setCarouselSlides(DEFAULT_CAROUSEL_SLIDES);
+    try {
+      localStorage.setItem('dirace_carousel_slides', JSON.stringify(DEFAULT_CAROUSEL_SLIDES));
+    } catch (e) {}
   };
 
   const openAuthModal = (message?: string, onSuccess?: () => void) => {
@@ -7552,6 +8162,11 @@ function App() {
           addEvent,
           updateEvent,
           deleteEvent,
+          carouselSlides,
+          addCarouselSlide,
+          removeCarouselSlide,
+          updateCarouselSlide,
+          resetCarouselSlides,
           currentUser,
           refreshUser,
           quickViewProduct,
