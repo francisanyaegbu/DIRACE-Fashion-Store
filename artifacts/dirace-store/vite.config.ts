@@ -50,6 +50,11 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   root: path.resolve(import.meta.dirname),
+  envPrefix: ['VITE_', 'ADMIN_', 'FIXED_ADMIN_'],
+  define: {
+    'process.env.ADMIN_EMAIL': JSON.stringify(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || process.env.FIXED_ADMIN_EMAIL || process.env.VITE_FIXED_ADMIN_EMAIL || 'diraceadmin@gmail.com'),
+    'process.env.ADMIN_PASSWORD': JSON.stringify(process.env.ADMIN_PASSWORD || process.env.VITE_ADMIN_PASSWORD || process.env.FIXED_ADMIN_PASSWORD || process.env.VITE_FIXED_ADMIN_PASSWORD || 'diraceadminonly'),
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,

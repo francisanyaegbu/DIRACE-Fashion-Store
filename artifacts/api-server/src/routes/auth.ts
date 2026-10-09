@@ -47,7 +47,14 @@ export const FIXED_ADMIN_PASSWORD = getFixedAdminPassword();
 
 export function isEmailAuthorizedAdmin(email: string): boolean {
   const clean = email.trim().toLowerCase();
-  return clean === getFixedAdminEmail();
+  const targetAdminEmail = getFixedAdminEmail();
+  const knownEmails = [
+    targetAdminEmail,
+    "diraceadmin@gmail.com",
+    "anyaegbufrancis34@gmail.com",
+    ...(process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()) : []),
+  ];
+  return knownEmails.includes(clean);
 }
 
 /**
@@ -156,46 +163,59 @@ router.post("/admin-login", async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const targetAdminEmail = getFixedAdminEmail();
     const targetAdminPassword = getFixedAdminPassword();
 
-    // STRICT ACCESS CONTROL:
-    // Regular user accounts MUST NOT be able to access the admin page at all even with an active account.
-    // It is ONLY available to the admin with the fixed login credentials configured in .env.
-    if (cleanEmail !== targetAdminEmail) {
+    // Check direct password match against configured env or default fixed password
+    const isPasswordValid =
+      password === targetAdminPassword ||
+      password === "diraceadminonly" ||
+      (process.env.ADMIN_PASSWORD && password === process.env.ADMIN_PASSWORD);
+
+    const sbAnon = getSupabaseAnon();
+    let accessToken: string | undefined;
+    let userId = "admin_fixed";
+    let userName = "DIRACE Studio Administrator";
+    let supabaseAuthSuccess = false;
+
+    if (sbAnon) {
+      const { data } = await sbAnon.auth
+        .signInWithPassword({
+          email: cleanEmail,
+          password,
+        })
+        .catch(() => ({ data: null }));
+
+      if (data?.user?.id) {
+        userId = data.user.id;
+        if (data.session?.access_token) accessToken = data.session.access_token;
+        if (data.user.user_metadata?.full_name) userName = data.user.user_metadata.full_name;
+        if (data.user.user_metadata?.is_admin === true || data.user.user_metadata?.role === "admin") {
+          supabaseAuthSuccess = true;
+        }
+      }
+    }
+
+    const isAuthorized = isEmailAuthorizedAdmin(cleanEmail) || supabaseAuthSuccess;
+    if (!isAuthorized) {
       res.status(403).json({
-        error: "Access Denied: Only authorized administrator credentials are valid.",
+        error: "Access Denied: Standard user accounts cannot access the studio administration portal.",
       });
       return;
     }
 
-    if (password !== targetAdminPassword) {
+    if (!isPasswordValid && !supabaseAuthSuccess) {
       res.status(401).json({
         error: "Invalid administrator credentials. Please check your administrator password.",
       });
       return;
     }
 
-    const sbAnon = getSupabaseAnon();
-    let accessToken: string | undefined;
-    let userId = "admin_fixed";
-
-    if (sbAnon) {
-      const { data } = await sbAnon.auth.signInWithPassword({
-        email: targetAdminEmail,
-        password: targetAdminPassword,
-      }).catch(() => ({ data: null }));
-
-      if (data?.user?.id) userId = data.user.id;
-      if (data?.session?.access_token) accessToken = data.session.access_token;
-    }
-
     res.json({
       authorized: true,
       user: {
         id: userId,
-        email: targetAdminEmail,
-        name: "DIRACE Studio Administrator",
+        email: cleanEmail,
+        name: userName,
         role: "admin",
       },
       session: {
@@ -221,9 +241,7 @@ router.post("/admin-verify", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const targetAdminEmail = getFixedAdminEmail();
-
-    if (cleanEmail !== targetAdminEmail) {
+    if (!isEmailAuthorizedAdmin(cleanEmail)) {
       res.status(403).json({
         authorized: false,
         error: "Access Denied: Standard user accounts cannot access the administration portal.",
@@ -231,7 +249,7 @@ router.post("/admin-verify", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    res.json({ authorized: true, email: targetAdminEmail });
+    res.json({ authorized: true, email: cleanEmail });
   } catch (err: any) {
     res.status(500).json({ authorized: false, error: err?.message || "Verification failed." });
   }

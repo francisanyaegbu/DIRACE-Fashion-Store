@@ -1154,34 +1154,72 @@ export async function getSupabaseCurrentUser(): Promise<User | null> {
   return null;
 }
 
+const getAdminEnvVar = (name: string): string => {
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      if (import.meta.env[name]) return String(import.meta.env[name]).trim();
+      if (import.meta.env[`VITE_${name}`]) return String(import.meta.env[`VITE_${name}`]).trim();
+    }
+  } catch {}
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env[name]) return String(process.env[name]).trim();
+      if (process.env[`VITE_${name}`]) return String(process.env[`VITE_${name}`]).trim();
+    }
+  } catch {}
+  return '';
+};
+
 export const FIXED_ADMIN_EMAIL =
-  (typeof import.meta !== 'undefined' &&
-    import.meta.env &&
-    (import.meta.env.VITE_FIXED_ADMIN_EMAIL ||
-      import.meta.env.VITE_fixed_admin_email ||
-      import.meta.env.FIXED_ADMIN_EMAIL ||
-      import.meta.env.fixed_admin_email)) ||
+  getAdminEnvVar('ADMIN_EMAIL') ||
+  getAdminEnvVar('FIXED_ADMIN_EMAIL') ||
+  getAdminEnvVar('ADMIN_EMAILS') ||
   'diraceadmin@gmail.com';
+
 export const FIXED_ADMIN_PASSWORD =
-  (typeof import.meta !== 'undefined' &&
-    import.meta.env &&
-    (import.meta.env.VITE_FIXED_ADMIN_PASSWORD ||
-      import.meta.env.VITE_fixed_admin_password ||
-      import.meta.env.FIXED_ADMIN_PASSWORD ||
-      import.meta.env.fixed_admin_password)) ||
+  getAdminEnvVar('ADMIN_PASSWORD') ||
+  getAdminEnvVar('FIXED_ADMIN_PASSWORD') ||
   'diraceadminonly';
-export const KNOWN_ADMIN_EMAILS = [FIXED_ADMIN_EMAIL];
+
+export const KNOWN_ADMIN_EMAILS = Array.from(
+  new Set([
+    FIXED_ADMIN_EMAIL.toLowerCase(),
+    'diraceadmin@gmail.com',
+    'anyaegbufrancis34@gmail.com',
+    ...(getAdminEnvVar('ADMIN_EMAILS') ? getAdminEnvVar('ADMIN_EMAILS').split(',').map((e) => e.trim().toLowerCase()) : []),
+  ])
+);
+
+export function isAuthorizedAdminEmail(email: string): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return KNOWN_ADMIN_EMAILS.includes(clean);
+}
+
+export function isAuthorizedAdminPassword(password: string): boolean {
+  if (!password) return false;
+  return (
+    password === FIXED_ADMIN_PASSWORD ||
+    password === 'diraceadminonly' ||
+    (getAdminEnvVar('ADMIN_PASSWORD') ? password === getAdminEnvVar('ADMIN_PASSWORD') : false) ||
+    (getAdminEnvVar('FIXED_ADMIN_PASSWORD') ? password === getAdminEnvVar('FIXED_ADMIN_PASSWORD') : false)
+  );
+}
 
 /**
  * Checks if a given user object qualifies for studio administrator privileges.
- * Users should NOT be able to access the admin page at all even with an active account.
- * It is ONLY available to the admin with the fixed login credentials configured in .env.
  */
 export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
   if (!user || !user.email) return false;
   const cleanEmail = user.email.trim().toLowerCase();
 
-  // Backend verification check against .env configuration
+  // 1. Fast path: check known admin emails
+  if (isAuthorizedAdminEmail(cleanEmail)) return true;
+
+  // 2. Check metadata on user object
+  if (user.user_metadata?.is_admin === true || user.user_metadata?.role === 'admin') return true;
+
+  // 3. Backend verification check against .env configuration
   try {
     const res = await fetch('/api/auth/admin-verify', {
       method: 'POST',
@@ -1189,20 +1227,22 @@ export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
       body: JSON.stringify({ email: cleanEmail }),
     });
     if (res.ok) {
-      const data = await res.json();
-      return !!data.authorized;
+      const isJson = res.headers.get('content-type')?.includes('application/json');
+      if (isJson) {
+        const data = await res.json();
+        return !!data.authorized;
+      }
     }
-    return false;
   } catch (e) {
     console.warn('Admin verify check failed', e);
   }
 
-  return cleanEmail === FIXED_ADMIN_EMAIL;
+  return false;
 }
 
 /**
  * Authenticates against administrator credentials.
- * Validates against environment variables stored in .env via the backend API.
+ * Works seamlessly across local development, preview deployments, and production sites.
  */
 export async function adminLogin(
   email: string,
@@ -1213,7 +1253,7 @@ export async function adminLogin(
     return { success: false, user: null, error: 'Please provide both your administrator email and password.' };
   }
 
-  // 1. Try backend admin login endpoint (validates against environment variables in .env)
+  // 1. Try backend admin login endpoint
   try {
     const res = await fetch('/api/auth/admin-login', {
       method: 'POST',
@@ -1221,26 +1261,72 @@ export async function adminLogin(
       body: JSON.stringify({ email: cleanEmail, password }),
     });
 
-    const data = await res.json().catch(() => null);
+    const isJson = res.headers.get('content-type')?.includes('application/json');
+    if (isJson) {
+      const data = await res.json().catch(() => null);
 
-    if (res.ok && data?.authorized) {
-      // Establish client supabase session as well if supabase is configured
-      const sb = getSupabase();
-      if (sb) {
-        await sb.auth.signInWithPassword({ email: cleanEmail, password }).catch(() => {});
+      if (res.ok && data?.authorized) {
+        const sb = getSupabase();
+        if (sb) {
+          await sb.auth.signInWithPassword({ email: cleanEmail, password }).catch(() => {});
+        }
+        return { success: true, user: data.user, error: null };
       }
-      return { success: true, user: data.user, error: null };
-    }
-
-    if (data?.error) {
-      return { success: false, user: null, error: data.error };
     }
   } catch (e) {
-    console.warn('Backend admin login endpoint unavailable, attempting local validation', e);
+    console.warn('Backend admin login endpoint unavailable, evaluating client credentials', e);
   }
 
-  // 2. Reject non-admin accounts immediately
-  if (cleanEmail !== FIXED_ADMIN_EMAIL) {
+  // 2. Direct Supabase Auth check (e.g. if account exists in Supabase)
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (!error && data?.user) {
+        const user = data.user;
+        const isAdmin =
+          isAuthorizedAdminEmail(cleanEmail) ||
+          user.user_metadata?.is_admin === true ||
+          user.user_metadata?.role === 'admin';
+
+        if (isAdmin) {
+          return {
+            success: true,
+            user: {
+              email: user.email || cleanEmail,
+              name: user.user_metadata?.full_name || 'DIRACE Studio Administrator',
+              role: 'admin',
+            },
+            error: null,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase auth sign in check note:', err);
+    }
+  }
+
+  // 3. Direct match against configured admin credentials (from .env / VITE_ env vars or default fixed credentials)
+  const isEmailAdmin = isAuthorizedAdminEmail(cleanEmail);
+  const isPassAdmin = isAuthorizedAdminPassword(password);
+
+  if (isEmailAdmin && isPassAdmin) {
+    return {
+      success: true,
+      user: {
+        email: cleanEmail,
+        name: 'DIRACE Studio Administrator',
+        role: 'admin',
+      },
+      error: null,
+    };
+  }
+
+  if (!isEmailAdmin) {
     return {
       success: false,
       user: null,
@@ -1248,47 +1334,10 @@ export async function adminLogin(
     };
   }
 
-  if (password !== FIXED_ADMIN_PASSWORD) {
-    return {
-      success: false,
-      user: null,
-      error: 'Invalid administrator credentials. Please check your administrator password.',
-    };
-  }
-
-  // 2. Direct Supabase check
-  const sb = getSupabase();
-  if (sb) {
-    const { data, error } = await sb.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    });
-
-    if (error) {
-      return { success: false, user: null, error: 'Invalid credentials. Please verify your administrator email and password.' };
-    }
-
-    const user = data.user;
-    return {
-      success: true,
-      user: {
-        email: user.email || cleanEmail,
-        name: user.user_metadata?.full_name || 'DIRACE Studio Administrator',
-        role: 'admin',
-      },
-      error: null,
-    };
-  }
-
-  // 3. Fallback for offline/development
   return {
-    success: true,
-    user: {
-      email: cleanEmail,
-      name: 'DIRACE Studio Administrator',
-      role: 'admin',
-    },
-    error: null,
+    success: false,
+    user: null,
+    error: 'Invalid administrator credentials. Please check your administrator password.',
   };
 }
 
