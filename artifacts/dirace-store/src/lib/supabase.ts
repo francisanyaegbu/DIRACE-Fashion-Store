@@ -1049,6 +1049,296 @@ export async function fetchNotificationHistory(): Promise<OrderEmailDispatch[]> 
   }
 }
 
+export interface ArchiveRecord {
+  id: string;
+  code: string;
+  volume: string;
+  title: string;
+  season: string;
+  status: string;
+  description: string;
+  materials: string;
+  image?: string;
+  created_at?: string;
+}
+
+export interface StudioEvent {
+  id: string;
+  badge: string;
+  date: string;
+  time: string;
+  city: string;
+  location: string;
+  title: string;
+  description: string;
+  accessStatus: string;
+  created_at?: string;
+}
+
+export interface CarouselSlide {
+  id: string;
+  image: string;
+  title?: string;
+  alt?: string;
+  created_at?: string;
+}
+
+export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
+  {
+    id: 'slide-1',
+    image: '/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg',
+    title: 'Drop Look 01 (Jacket & Cap)',
+    alt: 'DIRACE Drop Look 01',
+  },
+  {
+    id: 'slide-2',
+    image: '/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg',
+    title: 'Drop Look 02 (Dirace is Law Tee)',
+    alt: 'DIRACE Drop Look 02',
+  },
+];
+
+const LOCAL_ARCHIVES_KEY = 'dirace_studio_archives';
+const LOCAL_EVENTS_KEY = 'dirace_studio_events';
+const LOCAL_CAROUSEL_KEY = 'dirace_carousel_slides';
+
+// Archives Supabase Sync
+export async function fetchArchivesFromSupabase(): Promise<ArchiveRecord[]> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('archives').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        return data as ArchiveRecord[];
+      }
+    } catch (e) {
+      console.warn('Supabase archives fetch error:', e);
+    }
+  }
+  try {
+    const raw = localStorage.getItem(LOCAL_ARCHIVES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function addArchiveToSupabase(recordInput: Omit<ArchiveRecord, 'id'>): Promise<ArchiveRecord> {
+  const newRecord: ArchiveRecord = {
+    ...recordInput,
+    id: `arch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    created_at: new Date().toISOString(),
+  };
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('archives').insert([newRecord]).select().single();
+      if (!error && data) {
+        return data as ArchiveRecord;
+      }
+    } catch (e) {
+      console.warn('Supabase archive insert error:', e);
+    }
+  }
+  try {
+    const local = await fetchArchivesFromSupabase();
+    const updated = [newRecord, ...local];
+    localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(updated));
+  } catch {}
+  return newRecord;
+}
+
+export async function updateArchiveInSupabase(id: string, updates: Partial<ArchiveRecord>): Promise<void> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from('archives').update(updates).eq('id', id);
+    } catch (e) {
+      console.warn('Supabase archive update error:', e);
+    }
+  }
+  try {
+    const local = await fetchArchivesFromSupabase();
+    const updated = local.map((item) => (item.id === id ? { ...item, ...updates } : item));
+    localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+export async function deleteArchiveFromSupabase(id: string): Promise<void> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from('archives').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Supabase archive delete error:', e);
+    }
+  }
+  try {
+    const local = await fetchArchivesFromSupabase();
+    const updated = local.filter((item) => item.id !== id);
+    localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+// Studio Events Supabase Sync
+export async function fetchEventsFromSupabase(): Promise<StudioEvent[]> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('studio_events').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        return data as StudioEvent[];
+      }
+    } catch (e) {
+      console.warn('Supabase events fetch error:', e);
+    }
+  }
+  try {
+    const raw = localStorage.getItem(LOCAL_EVENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function addEventToSupabase(eventInput: Omit<StudioEvent, 'id'>): Promise<StudioEvent> {
+  const newEvent: StudioEvent = {
+    ...eventInput,
+    id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    created_at: new Date().toISOString(),
+  };
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('studio_events').insert([newEvent]).select().single();
+      if (!error && data) {
+        return data as StudioEvent;
+      }
+    } catch (e) {
+      console.warn('Supabase event insert error:', e);
+    }
+  }
+  try {
+    const local = await fetchEventsFromSupabase();
+    const updated = [newEvent, ...local];
+    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(updated));
+  } catch {}
+  return newEvent;
+}
+
+export async function updateEventInSupabase(id: string, updates: Partial<StudioEvent>): Promise<void> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from('studio_events').update(updates).eq('id', id);
+    } catch (e) {
+      console.warn('Supabase event update error:', e);
+    }
+  }
+  try {
+    const local = await fetchEventsFromSupabase();
+    const updated = local.map((item) => (item.id === id ? { ...item, ...updates } : item));
+    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+export async function deleteEventFromSupabase(id: string): Promise<void> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from('studio_events').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Supabase event delete error:', e);
+    }
+  }
+  try {
+    const local = await fetchEventsFromSupabase();
+    const updated = local.filter((item) => item.id !== id);
+    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+export async function fetchCarouselSlidesFromSupabase(): Promise<CarouselSlide[]> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('carousel_slides').select('*').order('created_at', { ascending: true });
+      if (!error && data && data.length > 0) {
+        return data as CarouselSlide[];
+      }
+    } catch (e) {
+      console.warn('Supabase carousel fetch error:', e);
+    }
+  }
+  try {
+    const raw = localStorage.getItem(LOCAL_CAROUSEL_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_CAROUSEL_SLIDES;
+}
+
+export async function addCarouselSlideToSupabase(slideInput: Omit<CarouselSlide, 'id'>): Promise<CarouselSlide> {
+  const newSlide: CarouselSlide = {
+    ...slideInput,
+    id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    created_at: new Date().toISOString(),
+  };
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('carousel_slides').insert([newSlide]).select().single();
+      if (!error && data) {
+        return data as CarouselSlide;
+      }
+    } catch (e) {
+      console.warn('Supabase carousel insert error:', e);
+    }
+  }
+  try {
+    const local = await fetchCarouselSlidesFromSupabase();
+    const updated = [...local, newSlide];
+    localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(updated));
+  } catch {}
+  return newSlide;
+}
+
+export async function removeCarouselSlideFromSupabase(id: string): Promise<void> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from('carousel_slides').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Supabase carousel delete error:', e);
+    }
+  }
+  try {
+    const local = await fetchCarouselSlidesFromSupabase();
+    const updated = local.filter((item) => item.id !== id);
+    localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+export async function saveCarouselSlidesToSupabase(slides: CarouselSlide[]): Promise<void> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      // replace all or upsert
+      await sb.from('carousel_slides').delete().neq('id', 'non_existent_id');
+      if (slides.length > 0) {
+        await sb.from('carousel_slides').insert(slides);
+      }
+    } catch (e) {
+      console.warn('Supabase carousel batch save error:', e);
+    }
+  }
+  try {
+    localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(slides));
+  } catch {}
+}
+
 export async function renderNotificationPreview(
   order: Order,
   status: 'Shipped' | 'Delivered'

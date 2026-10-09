@@ -83,56 +83,26 @@ import {
   type Order,
   type Review,
   DEFAULT_PRODUCTS,
+  type ArchiveRecord,
+  type StudioEvent,
+  type CarouselSlide,
+  DEFAULT_CAROUSEL_SLIDES,
+  fetchArchivesFromSupabase,
+  addArchiveToSupabase,
+  updateArchiveInSupabase,
+  deleteArchiveFromSupabase,
+  fetchEventsFromSupabase,
+  addEventToSupabase,
+  updateEventInSupabase,
+  deleteEventFromSupabase,
+  fetchCarouselSlidesFromSupabase,
+  addCarouselSlideToSupabase,
+  removeCarouselSlideFromSupabase,
+  saveCarouselSlidesToSupabase,
 } from './lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
 export type CartItem = { productId: string; size: string; quantity: number };
-
-export interface ArchiveRecord {
-  id: string;
-  code: string;
-  volume: string;
-  title: string;
-  season: string;
-  status: string;
-  description: string;
-  materials: string;
-}
-
-export interface StudioEvent {
-  id: string;
-  badge: string;
-  date: string;
-  city: string;
-  title: string;
-  time: string;
-  location: string;
-  description: string;
-  accessStatus: string;
-}
-
-export interface CarouselSlide {
-  id: string;
-  image: string;
-  title?: string;
-  alt?: string;
-  created_at?: string;
-}
-
-export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
-  {
-    id: 'slide-1',
-    image: '/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg',
-    title: 'Drop Look 01 (Jacket & Cap)',
-    alt: 'DIRACE Drop Look 01',
-  },
-  {
-    id: 'slide-2',
-    image: '/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg',
-    title: 'Drop Look 02 (Dirace is Law Tee)',
-    alt: 'DIRACE Drop Look 02',
-  },
-];
 
 interface StoreContextType {
   products: Product[];
@@ -7812,150 +7782,97 @@ function App() {
   const [authModalMessage, setAuthModalMessage] = useState('');
   const [pendingAuthAction, setPendingAuthAction] = useState<(() => void) | null>(null);
 
-  // Persistent studio archives & events - clean slate initially (no dummy data)
-  const [archives, setArchives] = useState<ArchiveRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem('dirace_studio_archives');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Persistent studio archives, events & carousel slides from Supabase online
+  const [archives, setArchives] = useState<ArchiveRecord[]>([]);
+  const [events, setEvents] = useState<StudioEvent[]>([]);
+  const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>(DEFAULT_CAROUSEL_SLIDES);
 
-  const [events, setEvents] = useState<StudioEvent[]>(() => {
+  const refreshArchives = async () => {
     try {
-      const saved = localStorage.getItem('dirace_studio_events');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
+      const data = await fetchArchivesFromSupabase();
+      setArchives(data || []);
+    } catch (e) {
+      console.warn('Could not fetch archives:', e);
     }
-  });
+  };
+
+  const refreshEvents = async () => {
+    try {
+      const data = await fetchEventsFromSupabase();
+      setEvents(data || []);
+    } catch (e) {
+      console.warn('Could not fetch events:', e);
+    }
+  };
+
+  const refreshCarouselSlides = async () => {
+    try {
+      const data = await fetchCarouselSlidesFromSupabase();
+      if (data && data.length > 0) {
+        setCarouselSlides(data);
+      }
+    } catch (e) {
+      console.warn('Could not fetch carousel slides:', e);
+    }
+  };
 
   const addArchive = async (recordInput: Omit<ArchiveRecord, 'id'>) => {
-    const newRecord: ArchiveRecord = {
-      ...recordInput,
-      id: `arch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    };
-    setArchives((prev) => {
-      const updated = [newRecord, ...prev];
-      try {
-        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const newRecord = await addArchiveToSupabase(recordInput);
+    await refreshArchives();
     return newRecord;
   };
 
   const updateArchive = async (id: string, updates: Partial<ArchiveRecord>) => {
-    setArchives((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
-      try {
-        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    await updateArchiveInSupabase(id, updates);
+    await refreshArchives();
   };
 
   const deleteArchive = async (id: string) => {
-    setArchives((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      try {
-        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    setArchives((prev) => prev.filter((item) => item.id !== id));
+    await deleteArchiveFromSupabase(id);
+    await refreshArchives();
   };
 
   const addEvent = async (eventInput: Omit<StudioEvent, 'id'>) => {
-    const newEvent: StudioEvent = {
-      ...eventInput,
-      id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    };
-    setEvents((prev) => {
-      const updated = [newEvent, ...prev];
-      try {
-        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const newEvent = await addEventToSupabase(eventInput);
+    await refreshEvents();
     return newEvent;
   };
 
   const updateEvent = async (id: string, updates: Partial<StudioEvent>) => {
-    setEvents((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
-      try {
-        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    await updateEventInSupabase(id, updates);
+    await refreshEvents();
   };
 
   const deleteEvent = async (id: string) => {
-    setEvents((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      try {
-        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    setEvents((prev) => prev.filter((item) => item.id !== id));
+    await deleteEventFromSupabase(id);
+    await refreshEvents();
   };
 
-  // Persistent carousel slides with default initial drop photos
-  const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>(() => {
-    try {
-      const saved = localStorage.getItem('dirace_carousel_slides');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // fallback
-    }
-    return DEFAULT_CAROUSEL_SLIDES;
-  });
-
   const addCarouselSlide = async (slideInput: Omit<CarouselSlide, 'id'>) => {
-    const newSlide: CarouselSlide = {
-      ...slideInput,
-      id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      created_at: new Date().toISOString(),
-    };
-    setCarouselSlides((prev) => {
-      const updated = [...prev, newSlide];
-      try {
-        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const newSlide = await addCarouselSlideToSupabase(slideInput);
+    await refreshCarouselSlides();
     return newSlide;
   };
 
   const removeCarouselSlide = async (id: string) => {
-    setCarouselSlides((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      try {
-        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    setCarouselSlides((prev) => prev.filter((item) => item.id !== id));
+    await removeCarouselSlideFromSupabase(id);
+    await refreshCarouselSlides();
   };
 
   const updateCarouselSlide = async (id: string, updates: Partial<CarouselSlide>) => {
-    setCarouselSlides((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
-      try {
-        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    const updatedList = carouselSlides.map((item) => (item.id === id ? { ...item, ...updates } : item));
+    setCarouselSlides(updatedList);
+    await saveCarouselSlidesToSupabase(updatedList);
+    await refreshCarouselSlides();
   };
 
   const resetCarouselSlides = async () => {
     setCarouselSlides(DEFAULT_CAROUSEL_SLIDES);
-    try {
-      localStorage.setItem('dirace_carousel_slides', JSON.stringify(DEFAULT_CAROUSEL_SLIDES));
-    } catch (e) {}
+    await saveCarouselSlidesToSupabase(DEFAULT_CAROUSEL_SLIDES);
+    await refreshCarouselSlides();
   };
 
   const openAuthModal = (message?: string, onSuccess?: () => void) => {
@@ -8063,6 +7980,9 @@ function App() {
     refreshProducts();
     purgeTestOrdersFromSupabase().finally(() => refreshOrders());
     refreshReviews();
+    refreshArchives();
+    refreshEvents();
+    refreshCarouselSlides();
     refreshUser();
   }, []);
 
