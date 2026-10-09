@@ -1102,17 +1102,22 @@ const LOCAL_ARCHIVES_KEY = 'dirace_studio_archives';
 const LOCAL_EVENTS_KEY = 'dirace_studio_events';
 const LOCAL_CAROUSEL_KEY = 'dirace_carousel_slides';
 
-// Archives Supabase Sync
+// Archives Supabase Sync (via Supabase Storage)
 export async function fetchArchivesFromSupabase(): Promise<ArchiveRecord[]> {
   const sb = getSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb.from('archives').select('*').order('created_at', { ascending: false });
+      const { data, error } = await sb.storage.from('products').download('catalog/archives.json');
       if (!error && data) {
-        return data as ArchiveRecord[];
+        const text = await data.text();
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(parsed));
+          return parsed;
+        }
       }
     } catch (e) {
-      console.warn('Supabase archives fetch error:', e);
+      console.warn('Supabase archives storage fetch note:', e);
     }
   }
   try {
@@ -1123,74 +1128,62 @@ export async function fetchArchivesFromSupabase(): Promise<ArchiveRecord[]> {
   }
 }
 
+export async function saveArchivesToSupabase(archives: ArchiveRecord[]): Promise<void> {
+  try {
+    localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(archives));
+  } catch {}
+
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const blob = new Blob([JSON.stringify(archives)], { type: 'application/json' });
+      await sb.storage.from('products').upload('catalog/archives.json', blob, { upsert: true });
+    } catch (e) {
+      console.warn('Supabase archives storage save note:', e);
+    }
+  }
+}
+
 export async function addArchiveToSupabase(recordInput: Omit<ArchiveRecord, 'id'>): Promise<ArchiveRecord> {
   const newRecord: ArchiveRecord = {
     ...recordInput,
     id: `arch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     created_at: new Date().toISOString(),
   };
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const { data, error } = await sb.from('archives').insert([newRecord]).select().single();
-      if (!error && data) {
-        return data as ArchiveRecord;
-      }
-    } catch (e) {
-      console.warn('Supabase archive insert error:', e);
-    }
-  }
-  try {
-    const local = await fetchArchivesFromSupabase();
-    const updated = [newRecord, ...local];
-    localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(updated));
-  } catch {}
+  const current = await fetchArchivesFromSupabase();
+  const updated = [newRecord, ...current];
+  await saveArchivesToSupabase(updated);
   return newRecord;
 }
 
 export async function updateArchiveInSupabase(id: string, updates: Partial<ArchiveRecord>): Promise<void> {
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      await sb.from('archives').update(updates).eq('id', id);
-    } catch (e) {
-      console.warn('Supabase archive update error:', e);
-    }
-  }
-  try {
-    const local = await fetchArchivesFromSupabase();
-    const updated = local.map((item) => (item.id === id ? { ...item, ...updates } : item));
-    localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(updated));
-  } catch {}
+  const current = await fetchArchivesFromSupabase();
+  const updated = current.map((item) => (item.id === id ? { ...item, ...updates } : item));
+  await saveArchivesToSupabase(updated);
 }
 
 export async function deleteArchiveFromSupabase(id: string): Promise<void> {
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      await sb.from('archives').delete().eq('id', id);
-    } catch (e) {
-      console.warn('Supabase archive delete error:', e);
-    }
-  }
-  try {
-    const local = await fetchArchivesFromSupabase();
-    const updated = local.filter((item) => item.id !== id);
-    localStorage.setItem(LOCAL_ARCHIVES_KEY, JSON.stringify(updated));
-  } catch {}
+  const current = await fetchArchivesFromSupabase();
+  const updated = current.filter((item) => item.id !== id);
+  await saveArchivesToSupabase(updated);
 }
 
-// Studio Events Supabase Sync
+// Studio Events Supabase Sync (via Supabase Storage)
 export async function fetchEventsFromSupabase(): Promise<StudioEvent[]> {
   const sb = getSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb.from('studio_events').select('*').order('created_at', { ascending: false });
+      const { data, error } = await sb.storage.from('products').download('catalog/events.json');
       if (!error && data) {
-        return data as StudioEvent[];
+        const text = await data.text();
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(parsed));
+          return parsed;
+        }
       }
     } catch (e) {
-      console.warn('Supabase events fetch error:', e);
+      console.warn('Supabase events storage fetch note:', e);
     }
   }
   try {
@@ -1201,80 +1194,62 @@ export async function fetchEventsFromSupabase(): Promise<StudioEvent[]> {
   }
 }
 
+export async function saveEventsToSupabase(events: StudioEvent[]): Promise<void> {
+  try {
+    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(events));
+  } catch {}
+
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const blob = new Blob([JSON.stringify(events)], { type: 'application/json' });
+      await sb.storage.from('products').upload('catalog/events.json', blob, { upsert: true });
+    } catch (e) {
+      console.warn('Supabase events storage save note:', e);
+    }
+  }
+}
+
 export async function addEventToSupabase(eventInput: Omit<StudioEvent, 'id'>): Promise<StudioEvent> {
   const newEvent: StudioEvent = {
     ...eventInput,
     id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     created_at: new Date().toISOString(),
   };
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const { data, error } = await sb.from('studio_events').insert([newEvent]).select().single();
-      if (!error && data) {
-        return data as StudioEvent;
-      }
-    } catch (e) {
-      console.warn('Supabase event insert error:', e);
-    }
-  }
-  try {
-    const local = await fetchEventsFromSupabase();
-    const updated = [newEvent, ...local];
-    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(updated));
-  } catch {}
+  const current = await fetchEventsFromSupabase();
+  const updated = [newEvent, ...current];
+  await saveEventsToSupabase(updated);
   return newEvent;
 }
 
 export async function updateEventInSupabase(id: string, updates: Partial<StudioEvent>): Promise<void> {
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      await sb.from('studio_events').update(updates).eq('id', id);
-    } catch (e) {
-      console.warn('Supabase event update error:', e);
-    }
-  }
-  try {
-    const local = await fetchEventsFromSupabase();
-    const updated = local.map((item) => (item.id === id ? { ...item, ...updates } : item));
-    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(updated));
-  } catch {}
+  const current = await fetchEventsFromSupabase();
+  const updated = current.map((item) => (item.id === id ? { ...item, ...updates } : item));
+  await saveEventsToSupabase(updated);
 }
 
 export async function deleteEventFromSupabase(id: string): Promise<void> {
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      await sb.from('studio_events').delete().eq('id', id);
-    } catch (e) {
-      console.warn('Supabase event delete error:', e);
-    }
-  }
-  try {
-    const local = await fetchEventsFromSupabase();
-    const updated = local.filter((item) => item.id !== id);
-    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(updated));
-  } catch {}
+  const current = await fetchEventsFromSupabase();
+  const updated = current.filter((item) => item.id !== id);
+  await saveEventsToSupabase(updated);
 }
 
+// Carousel Slides Supabase Sync (via Supabase Storage)
 export async function fetchCarouselSlidesFromSupabase(): Promise<CarouselSlide[]> {
   const sb = getSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb.from('carousel_slides').select('*').order('created_at', { ascending: true });
+      const { data, error } = await sb.storage.from('products').download('catalog/carousel_slides.json');
       if (!error && data) {
-        if (data.length > 0) {
-          localStorage.removeItem('dirace_carousel_explicitly_cleared');
-          return data as CarouselSlide[];
-        }
-        const explicitCleared = localStorage.getItem('dirace_carousel_explicitly_cleared');
-        if (explicitCleared === 'true') {
-          return [];
+        const text = await data.text();
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(parsed));
+          return parsed;
         }
       }
     } catch (e) {
-      console.warn('Supabase carousel fetch error:', e);
+      console.warn('Supabase carousel storage fetch note:', e);
     }
   }
 
@@ -1286,80 +1261,44 @@ export async function fetchCarouselSlidesFromSupabase(): Promise<CarouselSlide[]
     }
   } catch {}
 
-  const explicitCleared = localStorage.getItem('dirace_carousel_explicitly_cleared');
-  if (explicitCleared === 'true') {
-    return [];
-  }
+  // If uninitialized, seed default slides and persist to storage
+  const defaults = DEFAULT_CAROUSEL_SLIDES;
+  await saveCarouselSlidesToSupabase(defaults);
+  return defaults;
+}
 
-  return DEFAULT_CAROUSEL_SLIDES;
+export async function saveCarouselSlidesToSupabase(slides: CarouselSlide[]): Promise<void> {
+  try {
+    localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(slides));
+  } catch {}
+
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const blob = new Blob([JSON.stringify(slides)], { type: 'application/json' });
+      await sb.storage.from('products').upload('catalog/carousel_slides.json', blob, { upsert: true });
+    } catch (e) {
+      console.warn('Supabase carousel storage save note:', e);
+    }
+  }
 }
 
 export async function addCarouselSlideToSupabase(slideInput: Omit<CarouselSlide, 'id'>): Promise<CarouselSlide> {
-  localStorage.removeItem('dirace_carousel_explicitly_cleared');
   const newSlide: CarouselSlide = {
     ...slideInput,
     id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     created_at: new Date().toISOString(),
   };
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const { data, error } = await sb.from('carousel_slides').insert([newSlide]).select().single();
-      if (!error && data) {
-        return data as CarouselSlide;
-      }
-    } catch (e) {
-      console.warn('Supabase carousel insert error:', e);
-    }
-  }
-  try {
-    const local = await fetchCarouselSlidesFromSupabase();
-    const updated = [...local, newSlide];
-    localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(updated));
-  } catch {}
+  const current = await fetchCarouselSlidesFromSupabase();
+  const updated = [...current, newSlide];
+  await saveCarouselSlidesToSupabase(updated);
   return newSlide;
 }
 
 export async function removeCarouselSlideFromSupabase(id: string): Promise<void> {
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      await sb.from('carousel_slides').delete().eq('id', id);
-    } catch (e) {
-      console.warn('Supabase carousel delete error:', e);
-    }
-  }
-  try {
-    const local = await fetchCarouselSlidesFromSupabase();
-    const updated = local.filter((item) => item.id !== id);
-    if (updated.length === 0) {
-      localStorage.setItem('dirace_carousel_explicitly_cleared', 'true');
-    }
-    localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(updated));
-  } catch {}
-}
-
-export async function saveCarouselSlidesToSupabase(slides: CarouselSlide[]): Promise<void> {
-  if (slides.length === 0) {
-    localStorage.setItem('dirace_carousel_explicitly_cleared', 'true');
-  } else {
-    localStorage.removeItem('dirace_carousel_explicitly_cleared');
-  }
-
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      await sb.from('carousel_slides').delete().neq('id', 'non_existent_id');
-      if (slides.length > 0) {
-        await sb.from('carousel_slides').insert(slides);
-      }
-    } catch (e) {
-      console.warn('Supabase carousel batch save error:', e);
-    }
-  }
-  try {
-    localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(slides));
-  } catch {}
+  const current = await fetchCarouselSlidesFromSupabase();
+  const updated = current.filter((item) => item.id !== id);
+  await saveCarouselSlidesToSupabase(updated);
 }
 
 export async function renderNotificationPreview(
