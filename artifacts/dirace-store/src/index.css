@@ -54,28 +54,21 @@
   --accent-foreground: 0 0% 98%;
   --destructive: 0 0% 23%;
   --destructive-foreground: 0 0% 98%;
-  --app-font-sans: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-  --app-font-serif: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-  --app-font-display: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-  --app-font-mono: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  --app-font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+  --app-font-serif: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --app-font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --app-font-mono: 'DM Mono', monospace;
   --radius: 0.15rem;
 }
 
-* {
-  box-sizing: border-box;
-  font-family: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-}
+* { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
+  font-family: var(--app-font-sans);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-button, input, select, textarea, h1, h2, h3, h4, h5, h6, .display, .eyebrow, .mono, .wordmark, .heading-display {
-  font-family: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
 }
 button, input { font: inherit; }
 button { cursor: pointer; }
@@ -364,8 +357,9 @@ h1, h2, h3, .heading-display, .display {
   border-color: #fff;
 }
 
-/* Quick Navigation Bar at Bottom */
+/* Quick Navigation Bar at Bottom - Mini controls hidden as requested */
 .hero-carousel-quick-bar {
+  display: none !important;
   position: absolute;
   left: 0;
   right: 0;

@@ -48,6 +48,9 @@ import {
   Send,
   FileText,
   MapPin,
+  ArrowUp,
+  ArrowDown,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useRoute } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -83,26 +86,55 @@ import {
   type Order,
   type Review,
   DEFAULT_PRODUCTS,
-  type ArchiveRecord,
-  type StudioEvent,
-  type CarouselSlide,
-  DEFAULT_CAROUSEL_SLIDES,
-  fetchArchivesFromSupabase,
-  addArchiveToSupabase,
-  updateArchiveInSupabase,
-  deleteArchiveFromSupabase,
-  fetchEventsFromSupabase,
-  addEventToSupabase,
-  updateEventInSupabase,
-  deleteEventFromSupabase,
-  fetchCarouselSlidesFromSupabase,
-  addCarouselSlideToSupabase,
-  removeCarouselSlideFromSupabase,
-  saveCarouselSlidesToSupabase,
 } from './lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
 export type CartItem = { productId: string; size: string; quantity: number };
+
+export interface ArchiveRecord {
+  id: string;
+  code: string;
+  volume: string;
+  title: string;
+  season: string;
+  status: string;
+  description: string;
+  materials: string;
+}
+
+export interface StudioEvent {
+  id: string;
+  badge: string;
+  date: string;
+  city: string;
+  title: string;
+  time: string;
+  location: string;
+  description: string;
+  accessStatus: string;
+}
+
+export interface CarouselSlide {
+  id: string;
+  image: string;
+  alt: string;
+  title?: string;
+}
+
+export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
+  {
+    id: 'carousel-slide-1',
+    image: '/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg',
+    alt: 'DIRACE Drop Look 01',
+    title: 'Drop Look 01',
+  },
+  {
+    id: 'carousel-slide-2',
+    image: '/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg',
+    alt: 'DIRACE Drop Look 02',
+    title: 'Drop Look 02',
+  },
+];
 
 interface StoreContextType {
   products: Product[];
@@ -125,8 +157,9 @@ interface StoreContextType {
   deleteEvent: (id: string) => Promise<void>;
   carouselSlides: CarouselSlide[];
   addCarouselSlide: (slide: Omit<CarouselSlide, 'id'>) => Promise<CarouselSlide>;
-  removeCarouselSlide: (id: string) => Promise<void>;
+  deleteCarouselSlide: (id: string) => Promise<void>;
   updateCarouselSlide: (id: string, updates: Partial<CarouselSlide>) => Promise<void>;
+  reorderCarouselSlides: (startIndex: number, endIndex: number) => Promise<void>;
   resetCarouselSlides: () => Promise<void>;
   currentUser: User | null;
   refreshUser: () => Promise<void>;
@@ -160,10 +193,11 @@ const StoreContext = createContext<StoreContextType>({
   addEvent: async () => ({} as StudioEvent),
   updateEvent: async () => {},
   deleteEvent: async () => {},
-  carouselSlides: [],
+  carouselSlides: DEFAULT_CAROUSEL_SLIDES,
   addCarouselSlide: async () => ({} as CarouselSlide),
-  removeCarouselSlide: async () => {},
+  deleteCarouselSlide: async () => {},
   updateCarouselSlide: async () => {},
+  reorderCarouselSlides: async () => {},
   resetCarouselSlides: async () => {},
   currentUser: null,
   refreshUser: async () => {},
@@ -1186,25 +1220,41 @@ function HeroCarousel() {
   const { carouselSlides } = useStore();
   const slides = carouselSlides && carouselSlides.length > 0 ? carouselSlides : DEFAULT_CAROUSEL_SLIDES;
   const [current, setCurrent] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
 
-  const safeIndex = current >= slides.length ? 0 : current;
+  useEffect(() => {
+    if (current >= slides.length) {
+      setCurrent(0);
+    }
+  }, [slides.length, current]);
 
   const prevSlide = () => {
+    if (slides.length <= 1) return;
     setCurrent((prev) => (prev - 1 + slides.length) % slides.length);
   };
 
   const nextSlide = () => {
+    if (slides.length <= 1) return;
     setCurrent((prev) => (prev + 1) % slides.length);
   };
 
   useEffect(() => {
-    if (slides.length <= 1) return;
+    if (isPaused || slides.length <= 1) return;
     const interval = setInterval(() => {
       setCurrent((prev) => (prev + 1) % slides.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, [safeIndex, slides.length]);
+  }, [isPaused, slides.length, current]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') prevSlide();
+      if (e.key === 'ArrowRight') nextSlide();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [slides.length]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStart(e.targetTouches[0].clientX);
@@ -1223,22 +1273,24 @@ function HeroCarousel() {
     <section
       className="hero-carousel"
       aria-label="DIRACE Latest Drops"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
       {/* Slides */}
       {slides.map((slide, index) => {
-        const isActive = index === safeIndex;
+        const isActive = index === current;
         return (
           <div
-            key={slide.id}
+            key={slide.id || index}
             className={`hero-carousel-slide ${isActive ? 'active' : ''}`}
             aria-hidden={!isActive}
           >
             <div className="hero-carousel-img-wrap">
               <img
                 src={slide.image}
-                alt={slide.alt || slide.title || 'DIRACE Latest Drops'}
+                alt={slide.alt || 'DIRACE Drop Look'}
                 className="hero-carousel-img"
                 loading={index === 0 ? 'eager' : 'lazy'}
               />
@@ -1271,6 +1323,8 @@ function HeroCarousel() {
           </Link>
         </div>
       </div>
+
+      {/* Mini control for the carousel is hidden as requested */}
     </section>
   );
 }
@@ -3654,7 +3708,8 @@ function Admin() {
     deleteEvent,
     carouselSlides,
     addCarouselSlide,
-    removeCarouselSlide,
+    deleteCarouselSlide,
+    reorderCarouselSlides,
     resetCarouselSlides,
   } = useStore();
   const [activeTab, setActiveTab] = useState<'inventory' | 'orders' | 'reviews' | 'archives' | 'events' | 'carousel'>('inventory');
@@ -3738,20 +3793,22 @@ function Admin() {
 
   // Delete Confirmation Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: 'piece' | 'order' | 'review' | 'all-orders' | 'archive' | 'event' | 'carousel-slide';
+    type: 'piece' | 'order' | 'review' | 'all-orders' | 'archive' | 'event' | 'slide';
     id: string;
     name: string;
   } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Carousel Management States
-  const [carouselModalOpen, setCarouselModalOpen] = useState(false);
-  const [carouselImageUrl, setCarouselImageUrl] = useState('');
-  const [carouselImageTitle, setCarouselImageTitle] = useState('');
-  const [carouselImageAlt, setCarouselImageAlt] = useState('');
-  const [isCarouselUploading, setIsCarouselUploading] = useState(false);
-  const [carouselUploadFeedback, setCarouselUploadFeedback] = useState<string | null>(null);
-  const [isSavingCarouselSlide, setIsSavingCarouselSlide] = useState(false);
+  // Carousel Slides Management States
+  const [carouselForm, setCarouselForm] = useState({
+    image: '',
+    alt: '',
+    title: '',
+  });
+  const [isSlideUploading, setIsSlideUploading] = useState(false);
+  const [slideUploadFeedback, setSlideUploadFeedback] = useState<string | null>(null);
+  const [carouselActionMessage, setCarouselActionMessage] = useState<string | null>(null);
+  const [previewSlideIndex, setPreviewSlideIndex] = useState(0);
 
   // Archives Management States
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
@@ -4091,57 +4148,16 @@ function Admin() {
         await deleteArchive(id);
       } else if (type === 'event') {
         await deleteEvent(id);
-      } else if (type === 'carousel-slide') {
-        await removeCarouselSlide(id);
+      } else if (type === 'slide') {
+        await deleteCarouselSlide(id);
+        setCarouselActionMessage('Slide removed from carousel successfully.');
+        setTimeout(() => setCarouselActionMessage(null), 3000);
       }
     } catch (err) {
       console.error('Deletion error:', err);
     } finally {
       setDeletingId(null);
       setDeleteConfirm(null);
-    }
-  };
-
-  const handleCarouselImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsCarouselUploading(true);
-    setCarouselUploadFeedback('Uploading carousel image...');
-
-    try {
-      const res = await uploadProductImageToSupabase(file);
-      if (res.url) {
-        setCarouselImageUrl(res.url);
-        setCarouselUploadFeedback('Image uploaded to storage successfully!');
-      } else {
-        setCarouselUploadFeedback(res.error || 'Failed to upload image. Please try again.');
-      }
-    } catch (err: any) {
-      setCarouselUploadFeedback(err?.message || 'Error uploading image');
-    } finally {
-      setIsCarouselUploading(false);
-    }
-  };
-
-  const handleAddCarouselSlide = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!carouselImageUrl.trim()) return;
-
-    setIsSavingCarouselSlide(true);
-    try {
-      await addCarouselSlide({
-        image: carouselImageUrl.trim(),
-        title: carouselImageTitle.trim() || `Look ${carouselSlides.length + 1}`,
-        alt: carouselImageAlt.trim() || carouselImageTitle.trim() || 'DIRACE Carousel Slide',
-      });
-      setCarouselModalOpen(false);
-      setCarouselImageUrl('');
-      setCarouselImageTitle('');
-      setCarouselImageAlt('');
-      setCarouselUploadFeedback(null);
-    } finally {
-      setIsSavingCarouselSlide(false);
     }
   };
 
@@ -4320,6 +4336,96 @@ function Admin() {
     setRefreshingReviews(true);
     await refreshReviews();
     window.setTimeout(() => setRefreshingReviews(false), 600);
+  };
+
+  const CAROUSEL_PRESETS = [
+    { label: 'Drop Look 01 (WhatsApp)', url: '/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg', alt: 'DIRACE Drop Look 01' },
+    { label: 'Drop Look 02 (WhatsApp)', url: '/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg', alt: 'DIRACE Drop Look 02' },
+    { label: 'Bespoke Jacket Look', url: '/dirace-look-jacket.jpg', alt: 'DIRACE Bespoke Jacket Look' },
+    { label: 'Law Tee Look', url: '/dirace-look-law-tee.jpg', alt: 'DIRACE Law Tee Look' },
+    { label: 'Runway Look 01', url: '/carousel-drop-01.jpg', alt: 'DIRACE Runway Look 01' },
+    { label: 'Runway Look 02', url: '/carousel-drop-02.jpg', alt: 'DIRACE Runway Look 02' },
+    { label: 'Editorial Campaign', url: '/dirace-hero.jpg', alt: 'DIRACE Editorial Campaign Look' },
+  ];
+
+  const handleSlideImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsSlideUploading(true);
+    setSlideUploadFeedback('Uploading slide imagery...');
+
+    try {
+      // First attempt Supabase upload
+      const res = await uploadProductImageToSupabase(file);
+      if (res.url && !res.url.startsWith('blob:')) {
+        setCarouselForm((prev) => ({
+          ...prev,
+          image: res.url!,
+          alt: prev.alt || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+        }));
+        setSlideUploadFeedback('Image uploaded and synced successfully!');
+        return;
+      }
+
+      // Convert to Base64 data URL so it persists in localStorage across reloads!
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setCarouselForm((prev) => ({
+          ...prev,
+          image: dataUrl,
+          alt: prev.alt || file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+        }));
+        setSlideUploadFeedback('Image loaded and cached successfully!');
+      };
+      reader.onerror = () => {
+        setSlideUploadFeedback('Failed to read file locally.');
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setSlideUploadFeedback(err.message || 'Image processing failed.');
+    } finally {
+      setIsSlideUploading(false);
+    }
+  };
+
+  const handleAddCarouselSlideSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!carouselForm.image.trim()) {
+      setSlideUploadFeedback('Please upload an image or select a preset before saving.');
+      return;
+    }
+
+    try {
+      const newSlide = await addCarouselSlide({
+        image: carouselForm.image.trim(),
+        alt: carouselForm.alt.trim() || `DIRACE Look ${carouselSlides.length + 1}`,
+        title: carouselForm.title.trim() || `Look ${carouselSlides.length + 1}`,
+      });
+      setCarouselForm({ image: '', alt: '', title: '' });
+      setSlideUploadFeedback(null);
+      setCarouselActionMessage(`Slide "${newSlide.alt}" successfully added to hero carousel.`);
+      setTimeout(() => setCarouselActionMessage(null), 3500);
+    } catch (err: any) {
+      setSlideUploadFeedback(err.message || 'Failed to add carousel slide.');
+    }
+  };
+
+  const handleMoveCarouselSlide = async (index: number, direction: 'up' | 'down') => {
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= carouselSlides.length) return;
+    await reorderCarouselSlides(index, target);
+    setCarouselActionMessage(`Slide moved ${direction === 'up' ? 'earlier' : 'later'} in rotation.`);
+    setTimeout(() => setCarouselActionMessage(null), 2500);
+  };
+
+  const handleResetCarousel = async () => {
+    if (window.confirm('Reset the homepage carousel back to the original default drop looks?')) {
+      await resetCarouselSlides();
+      setCarouselActionMessage('Homepage carousel restored to default showcase looks.');
+      setTimeout(() => setCarouselActionMessage(null), 3000);
+    }
   };
 
   // Gate 1: Verification in progress
@@ -4683,14 +4789,13 @@ function Admin() {
           onClick={() => setActiveTab('carousel')}
           title="Click to manage homepage carousel images"
           style={{ cursor: 'pointer', transition: 'all .15s ease' }}
-          data-testid="stat-card-carousel"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="eyebrow accent">Homepage Carousel</div>
+            <div className="eyebrow accent">Hero Carousel</div>
             <ArrowRight size={13} className="muted" />
           </div>
-          <strong>{carouselSlides.length}</strong>
-          <span className="mono muted">Active hero slides &rarr;</span>
+          <strong>{carouselSlides.length} {carouselSlides.length === 1 ? 'Slide' : 'Slides'}</strong>
+          <span className="mono muted">Mini controls: Hidden &rarr;</span>
         </div>
       </div>
 
@@ -4818,9 +4923,8 @@ function Admin() {
             gap: 8,
           }}
           onClick={() => setActiveTab('carousel')}
-          data-testid="tab-admin-carousel"
         >
-          06 / Carousel Slides ({carouselSlides.length})
+          06 / Carousel Images ({carouselSlides.length})
         </button>
       </div>
 
@@ -6974,133 +7078,637 @@ function Admin() {
         </section>
       )}
 
-      {/* TAB 6: HOMEPAGE CAROUSEL SLIDES */}
+      {/* TAB 6: CAROUSEL IMAGERY (ADD / REMOVE / REORDER) */}
       {activeTab === 'carousel' && (
         <section>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+          {/* Section Header */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: 24,
+              flexWrap: 'wrap',
+              gap: 16,
+            }}
+          >
             <div>
-              <div className="eyebrow accent">Homepage Visual Direction</div>
-              <h2 className="display" style={{ fontSize: 32, margin: '4px 0' }}>
-                CAROUSEL SLIDES & HERO IMAGERY
+              <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ImageIcon size={13} />
+                Hero Directives & Presentation
+              </div>
+              <h2 className="display" style={{ fontSize: 32, margin: '4px 0 8px' }}>
+                HOMEPAGE CAROUSEL IMAGERY
               </h2>
-              <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
-                Control which editorial campaign photographs rotate in the homepage hero carousel animation. Add new lookbook drops or delete old slides.
+              <p className="muted" style={{ fontSize: 13, margin: 0, maxWidth: 640, lineHeight: 1.5 }}>
+                Curate, add, or remove the high-resolution imagery featured on the homepage hero carousel.
+                The bottom mini control bar (dots, progress counter, and buttons) is hidden on the storefront.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  background: 'hsl(var(--accent) / 0.12)',
+                  border: '1px solid hsl(var(--border))',
+                  fontSize: 11,
+                  fontFamily: 'var(--app-font-mono)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                <EyeOff size={12} />
+                Mini Controls: Hidden
+              </div>
               <button
                 type="button"
                 className="secondary-btn"
-                style={{ fontSize: 12 }}
-                onClick={() => {
-                  if (window.confirm('Reset carousel slides to default initial drops?')) {
-                    resetCarouselSlides();
-                  }
-                }}
-                data-testid="button-reset-carousel"
-              >
-                Reset Initial Drops
-              </button>
-              <button
-                type="button"
-                className="primary-btn"
+                onClick={handleResetCarousel}
                 style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                onClick={() => {
-                  setCarouselImageUrl('');
-                  setCarouselImageTitle('');
-                  setCarouselImageAlt('');
-                  setCarouselUploadFeedback(null);
-                  setCarouselModalOpen(true);
-                }}
-                data-testid="button-add-carousel-slide"
+                title="Restore default DIRACE drop looks"
               >
-                <Plus size={14} /> Add Carousel Image
+                <RefreshCw size={13} /> Reset to Defaults
               </button>
             </div>
           </div>
 
-          {carouselSlides.length === 0 ? (
-            <div className="empty-state" style={{ marginTop: 40, padding: '60px 24px' }}>
-              <h3 className="display" style={{ fontSize: 20 }}>NO CAROUSEL SLIDES ACTIVE</h3>
-              <p className="muted" style={{ fontSize: 13, maxWidth: 420, margin: '10px auto 20px' }}>
-                All carousel images have been removed. Add a new image or restore the default initial drops so the homepage displays visuals.
-              </p>
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={resetCarouselSlides}
-              >
-                Restore Initial Drops
-              </button>
+          {/* Action Notification Message */}
+          {carouselActionMessage && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '12px 18px',
+                background: 'hsl(142 76% 95%)',
+                border: '1px solid hsl(142 60% 75%)',
+                color: 'hsl(142 70% 25%)',
+                marginBottom: 20,
+                fontSize: 13,
+                animation: 'fadeIn 0.2s ease',
+              }}
+            >
+              <CheckCircle2 size={16} />
+              <span>{carouselActionMessage}</span>
             </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 24, marginTop: 20 }}>
-              {carouselSlides.map((slide, index) => (
-                <div
-                  key={slide.id}
-                  style={{
-                    border: '1px solid hsl(var(--border))',
-                    background: 'hsl(var(--card))',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                  }}
-                  data-testid={`carousel-slide-card-${index}`}
-                >
-                  <div style={{ position: 'relative', width: '100%', height: 320, background: '#000', overflow: 'hidden' }}>
-                    <img
-                      src={slide.image}
-                      alt={slide.alt || slide.title || 'Slide Image'}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+          )}
+
+          {/* Two-Column Workspace: Add New Slide + Live Simulator */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+              gap: 24,
+              marginBottom: 36,
+            }}
+          >
+            {/* Column 1: Add Carousel Slide Form */}
+            <div
+              style={{
+                background: 'hsl(var(--background))',
+                border: '1px solid hsl(var(--border))',
+                padding: 24,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Plus size={12} /> Add New Carousel Slide
+                </div>
+                <span className="mono muted" style={{ fontSize: 11 }}>
+                  Total: {carouselSlides.length}
+                </span>
+              </div>
+
+              <form onSubmit={handleAddCarouselSlideSubmit}>
+                {/* 1. Quick Presets Picker */}
+                <div style={{ marginBottom: 18 }}>
+                  <label className="mono" style={{ display: 'block', fontSize: 11, marginBottom: 8, letterSpacing: '0.06em' }}>
+                    QUICK PRESETS (CURATED STUDIO LOOKS):
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {CAROUSEL_PRESETS.map((preset) => (
+                      <button
+                        key={preset.url}
+                        type="button"
+                        onClick={() => {
+                          setCarouselForm({
+                            image: preset.url,
+                            alt: preset.alt,
+                            title: preset.label,
+                          });
+                          setSlideUploadFeedback(null);
+                        }}
+                        style={{
+                          background: carouselForm.image === preset.url ? 'hsl(var(--foreground))' : 'hsl(var(--background))',
+                          color: carouselForm.image === preset.url ? 'hsl(var(--background))' : 'hsl(var(--foreground))',
+                          border: '1px solid hsl(var(--border))',
+                          padding: '5px 10px',
+                          fontSize: 11,
+                          fontFamily: 'var(--app-font-mono)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. File Upload OR Image URL */}
+                <div style={{ marginBottom: 16 }}>
+                  <label className="mono" style={{ display: 'block', fontSize: 11, marginBottom: 6, letterSpacing: '0.06em' }}>
+                    UPLOAD IMAGE FILE FROM DEVICE:
+                  </label>
+                  <label
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      border: '1px dashed hsl(var(--border))',
+                      padding: '20px 14px',
+                      cursor: isSlideUploading ? 'wait' : 'pointer',
+                      background: 'hsl(var(--accent) / 0.04)',
+                      transition: 'border-color 0.2s',
+                    }}
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSlideImageUpload}
+                      disabled={isSlideUploading}
+                      style={{ display: 'none' }}
                     />
+                    {isSlideUploading ? (
+                      <Loader2 size={20} className="animate-spin muted" />
+                    ) : (
+                      <Upload size={20} className="muted" />
+                    )}
+                    <span style={{ fontSize: 12, fontWeight: 500 }}>
+                      {isSlideUploading ? 'Processing image...' : 'Click or drop new slide image'}
+                    </span>
+                    <span className="mono muted" style={{ fontSize: 10 }}>
+                      PNG, JPG, WEBP • Automatically optimized & saved
+                    </span>
+                  </label>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label className="mono" style={{ display: 'block', fontSize: 11, marginBottom: 6, letterSpacing: '0.06em' }}>
+                    OR ENTER CUSTOM IMAGE URL:
+                  </label>
+                  <input
+                    type="text"
+                    className="field-input"
+                    value={carouselForm.image}
+                    onChange={(e) => setCarouselForm((prev) => ({ ...prev, image: e.target.value }))}
+                    placeholder="https://... or /image-path.jpg"
+                    style={{ width: '100%', fontSize: 12, fontFamily: 'var(--app-font-mono)' }}
+                  />
+                </div>
+
+                {/* Image Preview if chosen */}
+                {carouselForm.image && (
+                  <div
+                    style={{
+                      marginBottom: 16,
+                      border: '1px solid hsl(var(--border))',
+                      padding: 10,
+                      background: 'hsl(var(--accent) / 0.03)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span className="mono" style={{ fontSize: 10, opacity: 0.7 }}>SELECTED SLIDE PREVIEW</span>
+                      <button
+                        type="button"
+                        onClick={() => setCarouselForm({ image: '', alt: '', title: '' })}
+                        style={{ background: 'none', border: 0, fontSize: 10, cursor: 'pointer', color: 'hsl(0 75% 45%)' }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: '100%',
+                        height: 140,
+                        overflow: 'hidden',
+                        background: '#000',
+                      }}
+                    >
+                      <img
+                        src={carouselForm.image}
+                        alt="Preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Alt & Label */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <label className="mono" style={{ display: 'block', fontSize: 11, marginBottom: 6, letterSpacing: '0.06em' }}>
+                      TITLE / IDENTIFIER:
+                    </label>
+                    <input
+                      type="text"
+                      className="field-input"
+                      value={carouselForm.title}
+                      onChange={(e) => setCarouselForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder={`Drop Look ${carouselSlides.length + 1}`}
+                      style={{ width: '100%', fontSize: 12 }}
+                    />
+                  </div>
+                  <div>
+                    <label className="mono" style={{ display: 'block', fontSize: 11, marginBottom: 6, letterSpacing: '0.06em' }}>
+                      ALT TEXT (SEO):
+                    </label>
+                    <input
+                      type="text"
+                      className="field-input"
+                      value={carouselForm.alt}
+                      onChange={(e) => setCarouselForm((prev) => ({ ...prev, alt: e.target.value }))}
+                      placeholder={`DIRACE Drop Look ${carouselSlides.length + 1}`}
+                      style={{ width: '100%', fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+
+                {slideUploadFeedback && (
+                  <div
+                    style={{
+                      marginBottom: 14,
+                      fontSize: 12,
+                      color: slideUploadFeedback.includes('success') || slideUploadFeedback.includes('cached')
+                        ? 'hsl(142 70% 30%)'
+                        : 'hsl(0 75% 45%)',
+                      fontFamily: 'var(--app-font-mono)',
+                    }}
+                  >
+                    {slideUploadFeedback}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={!carouselForm.image.trim() || isSlideUploading}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    fontSize: 12,
+                  }}
+                >
+                  <Plus size={14} /> Add Slide to Hero Carousel
+                </button>
+              </form>
+            </div>
+
+            {/* Column 2: Live Public Store Simulator */}
+            <div
+              style={{
+                background: 'hsl(var(--background))',
+                border: '1px solid hsl(var(--border))',
+                padding: 24,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div className="eyebrow accent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Eye size={12} /> Live Carousel Simulation
+                </div>
+                <span className="mono muted" style={{ fontSize: 10 }}>
+                  Controls: Hidden
+                </span>
+              </div>
+              <p className="muted" style={{ fontSize: 12, margin: '0 0 16px', lineHeight: 1.4 }}>
+                This is a real-time preview of the hero carousel on the public storefront. The mini navigation bar is hidden.
+              </p>
+
+              {/* Simulation Box */}
+              <div
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  aspectRatio: '16 / 9',
+                  background: '#09090b',
+                  overflow: 'hidden',
+                  border: '1px solid hsl(var(--border))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                }}
+              >
+                {carouselSlides.length > 0 ? (
+                  <>
+                    <img
+                      src={carouselSlides[previewSlideIndex % carouselSlides.length]?.image}
+                      alt={carouselSlides[previewSlideIndex % carouselSlides.length]?.alt}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        objectPosition: 'center 25%',
+                        opacity: 0.9,
+                        transition: 'opacity 0.4s ease',
+                      }}
+                    />
+                    {/* Scrim */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%)',
+                      }}
+                    />
+                    {/* Center text simulation */}
+                    <div
+                      style={{
+                        position: 'relative',
+                        zIndex: 2,
+                        textAlign: 'center',
+                        padding: '0 16px',
+                      }}
+                    >
+                      <h4
+                        style={{
+                          fontFamily: 'var(--app-font-display)',
+                          fontSize: 'clamp(18px, 3.5vw, 28px)',
+                          letterSpacing: '-0.03em',
+                          textTransform: 'uppercase',
+                          margin: 0,
+                          fontWeight: 700,
+                          textShadow: '0 2px 16px rgba(0,0,0,0.8)',
+                        }}
+                      >
+                        dirace latest drops
+                      </h4>
+                      <div
+                        style={{
+                          marginTop: 10,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: 9,
+                          fontFamily: 'var(--app-font-mono)',
+                          padding: '4px 10px',
+                          background: 'rgba(255, 255, 255, 0.2)',
+                          backdropFilter: 'blur(4px)',
+                          letterSpacing: '0.08em',
+                        }}
+                      >
+                        Explore Drops &bull; Our Story
+                      </div>
+                    </div>
+
+                    {/* Indicator showing current slide in simulation */}
                     <div
                       style={{
                         position: 'absolute',
                         top: 10,
-                        left: 10,
-                        background: 'rgba(0,0,0,0.75)',
-                        color: '#fff',
-                        font: '10px var(--app-font-mono)',
-                        padding: '4px 8px',
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
+                        right: 10,
+                        zIndex: 3,
+                        background: 'rgba(0,0,0,0.6)',
+                        padding: '3px 8px',
+                        fontSize: 9,
+                        fontFamily: 'var(--app-font-mono)',
                         borderRadius: 2,
                       }}
                     >
-                      Slide {String(index + 1).padStart(2, '0')}
+                      {String((previewSlideIndex % carouselSlides.length) + 1).padStart(2, '0')} / {String(carouselSlides.length).padStart(2, '0')}
                     </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: 20 }}>
+                    <AlertCircle size={24} style={{ opacity: 0.5, margin: '0 auto 8px' }} />
+                    <p style={{ fontSize: 12, margin: 0 }}>No slides currently configured</p>
                   </div>
-                  <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-                    <div>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: 14, fontWeight: 600 }}>
-                        {slide.title || `Editorial Look ${index + 1}`}
-                      </h4>
-                      <p className="mono muted" style={{ fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={slide.image}>
-                        {slide.image}
-                      </p>
+                )}
+              </div>
+
+              {/* Slider selector thumbnails inside simulator */}
+              {carouselSlides.length > 1 && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, overflowX: 'auto', paddingBottom: 4 }}>
+                  {carouselSlides.map((slide, idx) => (
+                    <button
+                      key={slide.id}
+                      type="button"
+                      onClick={() => setPreviewSlideIndex(idx)}
+                      style={{
+                        flexShrink: 0,
+                        width: 56,
+                        height: 36,
+                        padding: 0,
+                        border: (previewSlideIndex % carouselSlides.length) === idx
+                          ? '2px solid hsl(var(--foreground))'
+                          : '1px solid hsl(var(--border))',
+                        background: '#000',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        opacity: (previewSlideIndex % carouselSlides.length) === idx ? 1 : 0.6,
+                        transition: 'opacity 0.2s',
+                      }}
+                      title={`Preview Slide #${idx + 1}`}
+                    >
+                      <img src={slide.image} alt={slide.alt} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Active Carousel Slides List */}
+          <div
+            style={{
+              background: 'hsl(var(--background))',
+              border: '1px solid hsl(var(--border))',
+              padding: 24,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 20,
+                flexWrap: 'wrap',
+                gap: 12,
+              }}
+            >
+              <div>
+                <div className="eyebrow accent">Live Sequence Registry</div>
+                <h3 className="display" style={{ fontSize: 24, margin: '4px 0 0' }}>
+                  ACTIVE SLIDES ({carouselSlides.length})
+                </h3>
+              </div>
+              <span className="mono muted" style={{ fontSize: 11 }}>
+                Drag or reorder slides to change presentation sequence
+              </span>
+            </div>
+
+            {carouselSlides.length === 0 ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '48px 20px',
+                  background: 'hsl(var(--accent) / 0.02)',
+                  border: '1px dashed hsl(var(--border))',
+                }}
+              >
+                <ImageIcon size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                <h4 style={{ fontSize: 15, margin: '0 0 6px', fontWeight: 600 }}>No Carousel Slides Configured</h4>
+                <p className="muted" style={{ fontSize: 12, margin: '0 0 16px' }}>
+                  Add a new slide using the form above, or restore the default drop looks.
+                </p>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={resetCarouselSlides}
+                  style={{ fontSize: 12 }}
+                >
+                  Restore Default Drop Looks
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {carouselSlides.map((slide, index) => (
+                  <div
+                    key={slide.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 14,
+                      border: '1px solid hsl(var(--border))',
+                      background: 'hsl(var(--background))',
+                      flexWrap: 'wrap',
+                      gap: 16,
+                      transition: 'border-color 0.2s',
+                    }}
+                  >
+                    {/* Left: Sequence + Thumbnail + Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1, minWidth: 260 }}>
+                      <div
+                        className="mono"
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          width: 32,
+                          height: 32,
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: 'hsl(var(--accent) / 0.1)',
+                          border: '1px solid hsl(var(--border))',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {String(index + 1).padStart(2, '0')}
+                      </div>
+
+                      <div
+                        style={{
+                          width: 80,
+                          height: 52,
+                          overflow: 'hidden',
+                          border: '1px solid hsl(var(--border))',
+                          background: '#000',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <img
+                          src={slide.image}
+                          alt={slide.alt}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>
+                            {slide.title || `Slide ${index + 1}`}
+                          </span>
+                          <span className="mono muted" style={{ fontSize: 10 }}>
+                            {slide.alt}
+                          </span>
+                        </div>
+                        <div
+                          className="mono muted"
+                          style={{
+                            fontSize: 11,
+                            marginTop: 4,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: 380,
+                          }}
+                          title={slide.image}
+                        >
+                          {slide.image.startsWith('data:') ? 'Embedded High-Res Base64 Image' : slide.image}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid hsl(var(--border))', paddingTop: 12 }}>
+
+                    {/* Right: Reorder + Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <button
                         type="button"
-                        className="secondary-btn"
-                        style={{ fontSize: 11, padding: '6px 12px', color: 'hsl(0 75% 45%)', borderColor: 'hsl(0 75% 45% / 0.3)' }}
-                        onClick={() => {
-                          setDeleteConfirm({
-                            type: 'carousel-slide',
-                            id: slide.id,
-                            name: slide.title || `Slide ${index + 1}`,
-                          });
-                        }}
-                        data-testid={`button-delete-slide-${index}`}
+                        className="icon-btn"
+                        onClick={() => handleMoveCarouselSlide(index, 'up')}
+                        disabled={index === 0}
+                        title="Move Earlier in Carousel Sequence"
+                        style={{ opacity: index === 0 ? 0.35 : 1, cursor: index === 0 ? 'not-allowed' : 'pointer' }}
                       >
-                        <Trash2 size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Remove Image
+                        <ArrowUp size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() => handleMoveCarouselSlide(index, 'down')}
+                        disabled={index === carouselSlides.length - 1}
+                        title="Move Later in Carousel Sequence"
+                        style={{
+                          opacity: index === carouselSlides.length - 1 ? 0.35 : 1,
+                          cursor: index === carouselSlides.length - 1 ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        <ArrowDown size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() =>
+                          setDeleteConfirm({
+                            type: 'slide',
+                            id: slide.id,
+                            name: slide.alt || slide.title || `Slide #${index + 1}`,
+                          })
+                        }
+                        title="Remove Slide from Carousel"
+                        style={{ color: 'hsl(0 75% 45%)' }}
+                      >
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
@@ -7450,190 +8058,6 @@ function Admin() {
         </div>
       )}
 
-      {/* ADD CAROUSEL SLIDE MODAL */}
-      {carouselModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.72)',
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: 24,
-          }}
-          onClick={() => setCarouselModalOpen(false)}
-        >
-          <div
-            style={{
-              background: 'hsl(var(--background))',
-              border: '1px solid hsl(var(--border))',
-              maxWidth: 540,
-              width: '100%',
-              padding: 28,
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 24px 48px rgba(0,0,0,0.28)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div className="eyebrow accent">Homepage Visuals</div>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => setCarouselModalOpen(false)}
-                aria-label="Close modal"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <h3 className="display" style={{ fontSize: 24, margin: '0 0 20px' }}>
-              ADD CAROUSEL IMAGE
-            </h3>
-
-            <form onSubmit={handleAddCarouselSlide} style={{ display: 'grid', gap: 14 }}>
-              <div className="field">
-                <label>Upload From Device</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleCarouselImageUpload}
-                  disabled={isCarouselUploading}
-                  style={{ fontSize: 12, padding: 8, border: '1px dashed hsl(var(--border))' }}
-                />
-                {carouselUploadFeedback && (
-                  <p className="mono accent" style={{ fontSize: 11, marginTop: 4 }}>
-                    {carouselUploadFeedback}
-                  </p>
-                )}
-              </div>
-
-              <div className="field">
-                <label>Or Paste Image URL *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="https://... or /image.jpg"
-                  value={carouselImageUrl}
-                  onChange={(e) => setCarouselImageUrl(e.target.value)}
-                  data-testid="input-carousel-image-url"
-                />
-              </div>
-
-              <div className="field">
-                <label style={{ marginBottom: 4, display: 'block' }}>Quick Presets (Click to Select)</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    style={{ fontSize: 10, padding: '4px 8px' }}
-                    onClick={() => {
-                      setCarouselImageUrl('/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg');
-                      setCarouselImageTitle('Drop Look 01 (Jacket & Cap)');
-                    }}
-                  >
-                    WhatsApp Look 01
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    style={{ fontSize: 10, padding: '4px 8px' }}
-                    onClick={() => {
-                      setCarouselImageUrl('/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg');
-                      setCarouselImageTitle('Drop Look 02 (Dirace is Law Tee)');
-                    }}
-                  >
-                    WhatsApp Look 02
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    style={{ fontSize: 10, padding: '4px 8px' }}
-                    onClick={() => {
-                      setCarouselImageUrl('/dirace-hero.jpg');
-                      setCarouselImageTitle('Campaign Lookbook 01');
-                    }}
-                  >
-                    Campaign Editorial
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    style={{ fontSize: 10, padding: '4px 8px' }}
-                    onClick={() => {
-                      setCarouselImageUrl('/dirace-look-02.jpg');
-                      setCarouselImageTitle('Study 02 (Tailoring & Drape)');
-                    }}
-                  >
-                    Study 02
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    style={{ fontSize: 10, padding: '4px 8px' }}
-                    onClick={() => {
-                      setCarouselImageUrl('/dirace-look-03.jpg');
-                      setCarouselImageTitle('Study 03 (Monochrome Form)');
-                    }}
-                  >
-                    Study 03
-                  </button>
-                </div>
-              </div>
-
-              <div className="field">
-                <label>Slide Label / Title</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Drop Look 03 - Oversized Tee"
-                  value={carouselImageTitle}
-                  onChange={(e) => setCarouselImageTitle(e.target.value)}
-                  data-testid="input-carousel-image-title"
-                />
-              </div>
-
-              {carouselImageUrl && (
-                <div style={{ marginTop: 6, marginBottom: 8, border: '1px solid hsl(var(--border))', padding: 8, background: '#000' }}>
-                  <div className="mono muted" style={{ fontSize: 10, color: '#aaa', marginBottom: 6 }}>IMAGE PREVIEW:</div>
-                  <img
-                    src={carouselImageUrl}
-                    alt="Preview"
-                    style={{ maxHeight: 180, width: '100%', objectFit: 'contain' }}
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => setCarouselModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="primary-btn"
-                  disabled={!carouselImageUrl.trim() || isSavingCarouselSlide || isCarouselUploading}
-                  data-testid="button-submit-carousel-slide"
-                >
-                  {isSavingCarouselSlide ? 'Adding...' : 'Add Slide to Carousel'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* IN-APP DELETION CONFIRMATION DIALOG (IFRAME-SAFE) */}
       {deleteConfirm && (
         <div
@@ -7671,7 +8095,7 @@ function Admin() {
               DELETE PERMANENTLY?
             </h3>
             <p style={{ fontSize: 13, lineHeight: 1.6, margin: '0 0 24px', color: 'hsl(var(--foreground))' }}>
-              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove {deleteConfirm.type === 'piece' ? 'this catalog piece' : deleteConfirm.type === 'order' ? 'this order record' : deleteConfirm.type === 'all-orders' ? 'all client order records' : deleteConfirm.type === 'archive' ? 'this archival record' : deleteConfirm.type === 'event' ? 'this studio experience' : deleteConfirm.type === 'carousel-slide' ? 'this homepage carousel slide' : 'this client reflection'}.
+              Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>? This will permanently remove {deleteConfirm.type === 'piece' ? 'this catalog piece' : deleteConfirm.type === 'order' ? 'this order record' : deleteConfirm.type === 'all-orders' ? 'all client order records' : deleteConfirm.type === 'archive' ? 'this archival record' : deleteConfirm.type === 'event' ? 'this studio experience' : deleteConfirm.type === 'slide' ? 'this hero carousel slide' : 'this client reflection'}.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button
@@ -7782,97 +8206,161 @@ function App() {
   const [authModalMessage, setAuthModalMessage] = useState('');
   const [pendingAuthAction, setPendingAuthAction] = useState<(() => void) | null>(null);
 
-  // Persistent studio archives, events & carousel slides from Supabase online
-  const [archives, setArchives] = useState<ArchiveRecord[]>([]);
-  const [events, setEvents] = useState<StudioEvent[]>([]);
-  const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>(DEFAULT_CAROUSEL_SLIDES);
-
-  const refreshArchives = async () => {
+  // Persistent studio archives & events - clean slate initially (no dummy data)
+  const [archives, setArchives] = useState<ArchiveRecord[]>(() => {
     try {
-      const data = await fetchArchivesFromSupabase();
-      setArchives(data || []);
-    } catch (e) {
-      console.warn('Could not fetch archives:', e);
+      const saved = localStorage.getItem('dirace_studio_archives');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
-  };
+  });
 
-  const refreshEvents = async () => {
+  const [events, setEvents] = useState<StudioEvent[]>(() => {
     try {
-      const data = await fetchEventsFromSupabase();
-      setEvents(data || []);
-    } catch (e) {
-      console.warn('Could not fetch events:', e);
+      const saved = localStorage.getItem('dirace_studio_events');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
-  };
+  });
 
-  const refreshCarouselSlides = async () => {
+  // Persistent Hero Carousel Slides - Editable via Admin
+  const [carouselSlides, setCarouselSlides] = useState<CarouselSlide[]>(() => {
     try {
-      const data = await fetchCarouselSlidesFromSupabase();
-      if (data && data.length > 0) {
-        setCarouselSlides(data);
+      const saved = localStorage.getItem('dirace_carousel_slides');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (e) {
-      console.warn('Could not fetch carousel slides:', e);
+      return DEFAULT_CAROUSEL_SLIDES;
+    } catch {
+      return DEFAULT_CAROUSEL_SLIDES;
     }
-  };
-
-  const addArchive = async (recordInput: Omit<ArchiveRecord, 'id'>) => {
-    const newRecord = await addArchiveToSupabase(recordInput);
-    await refreshArchives();
-    return newRecord;
-  };
-
-  const updateArchive = async (id: string, updates: Partial<ArchiveRecord>) => {
-    await updateArchiveInSupabase(id, updates);
-    await refreshArchives();
-  };
-
-  const deleteArchive = async (id: string) => {
-    setArchives((prev) => prev.filter((item) => item.id !== id));
-    await deleteArchiveFromSupabase(id);
-    await refreshArchives();
-  };
-
-  const addEvent = async (eventInput: Omit<StudioEvent, 'id'>) => {
-    const newEvent = await addEventToSupabase(eventInput);
-    await refreshEvents();
-    return newEvent;
-  };
-
-  const updateEvent = async (id: string, updates: Partial<StudioEvent>) => {
-    await updateEventInSupabase(id, updates);
-    await refreshEvents();
-  };
-
-  const deleteEvent = async (id: string) => {
-    setEvents((prev) => prev.filter((item) => item.id !== id));
-    await deleteEventFromSupabase(id);
-    await refreshEvents();
-  };
+  });
 
   const addCarouselSlide = async (slideInput: Omit<CarouselSlide, 'id'>) => {
-    const newSlide = await addCarouselSlideToSupabase(slideInput);
-    await refreshCarouselSlides();
+    const newSlide: CarouselSlide = {
+      ...slideInput,
+      id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setCarouselSlides((prev) => {
+      const updated = [...prev, newSlide];
+      try {
+        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     return newSlide;
   };
 
-  const removeCarouselSlide = async (id: string) => {
-    setCarouselSlides((prev) => prev.filter((item) => item.id !== id));
-    await removeCarouselSlideFromSupabase(id);
-    await refreshCarouselSlides();
+  const deleteCarouselSlide = async (id: string) => {
+    setCarouselSlides((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const updateCarouselSlide = async (id: string, updates: Partial<CarouselSlide>) => {
-    const updatedList = carouselSlides.map((item) => (item.id === id ? { ...item, ...updates } : item));
-    setCarouselSlides(updatedList);
-    await saveCarouselSlidesToSupabase(updatedList);
-    await refreshCarouselSlides();
+    setCarouselSlides((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
+      try {
+        localStorage.setItem('dirace_carousel_slides', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const reorderCarouselSlides = async (startIndex: number, endIndex: number) => {
+    setCarouselSlides((prev) => {
+      const result = Array.from(prev);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      try {
+        localStorage.setItem('dirace_carousel_slides', JSON.stringify(result));
+      } catch (e) {}
+      return result;
+    });
   };
 
   const resetCarouselSlides = async () => {
     setCarouselSlides(DEFAULT_CAROUSEL_SLIDES);
-    await saveCarouselSlidesToSupabase(DEFAULT_CAROUSEL_SLIDES);
-    await refreshCarouselSlides();
+    try {
+      localStorage.setItem('dirace_carousel_slides', JSON.stringify(DEFAULT_CAROUSEL_SLIDES));
+    } catch (e) {}
+  };
+
+  const addArchive = async (recordInput: Omit<ArchiveRecord, 'id'>) => {
+    const newRecord: ArchiveRecord = {
+      ...recordInput,
+      id: `arch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setArchives((prev) => {
+      const updated = [newRecord, ...prev];
+      try {
+        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    return newRecord;
+  };
+
+  const updateArchive = async (id: string, updates: Partial<ArchiveRecord>) => {
+    setArchives((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
+      try {
+        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const deleteArchive = async (id: string) => {
+    setArchives((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem('dirace_studio_archives', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const addEvent = async (eventInput: Omit<StudioEvent, 'id'>) => {
+    const newEvent: StudioEvent = {
+      ...eventInput,
+      id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    setEvents((prev) => {
+      const updated = [newEvent, ...prev];
+      try {
+        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    return newEvent;
+  };
+
+  const updateEvent = async (id: string, updates: Partial<StudioEvent>) => {
+    setEvents((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, ...updates } : item));
+      try {
+        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const deleteEvent = async (id: string) => {
+    setEvents((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem('dirace_studio_events', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const openAuthModal = (message?: string, onSuccess?: () => void) => {
@@ -7980,9 +8468,6 @@ function App() {
     refreshProducts();
     purgeTestOrdersFromSupabase().finally(() => refreshOrders());
     refreshReviews();
-    refreshArchives();
-    refreshEvents();
-    refreshCarouselSlides();
     refreshUser();
   }, []);
 
@@ -8084,8 +8569,9 @@ function App() {
           deleteEvent,
           carouselSlides,
           addCarouselSlide,
-          removeCarouselSlide,
+          deleteCarouselSlide,
           updateCarouselSlide,
+          reorderCarouselSlides,
           resetCarouselSlides,
           currentUser,
           refreshUser,
