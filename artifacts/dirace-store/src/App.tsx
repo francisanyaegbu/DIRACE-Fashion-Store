@@ -2381,14 +2381,12 @@ function Archives() {
 }
 
 function About({
-  wishlist = [],
-  onToggleWish = () => {},
+  wishlist: _wishlist = [],
+  onToggleWish: _onToggleWish = () => {},
 }: {
   wishlist?: string[];
   onToggleWish?: (id: string) => void;
-}) {
-  const { products } = useStore();
-
+} = {}) {
   return (
     <main>
       {/* Editorial Header */}
@@ -2452,68 +2450,6 @@ function About({
         </div>
       </div>
 
-      {/* Collection 01 / 25 Architectural Ethos */}
-      <section className="section page-wrap">
-        <div className="hero-copy" style={{ padding: '40px 0', borderBottom: '1px solid hsl(var(--border))' }}>
-          <div>
-            <div className="eyebrow accent">Collection 01 / 25 · Architectural Vision</div>
-            <h2 className="display" style={{ marginTop: 12, marginBottom: 20 }}>
-              DEFINE
-              <br />
-              YOUR OWN
-              <br />
-              <span className="accent">STANDARD.</span>
-            </h2>
-          </div>
-          <div>
-            <p style={{ maxWidth: 480, fontSize: 14, lineHeight: 1.8 }}>
-              DIRACE is a uniform for the self-defined. Considered shapes, uncompromising materials, no borrowed ideas.
-            </p>
-            <div className="hero-note" style={{ marginTop: 24, maxWidth: 480 }}>
-              <span>THE NEW STANDARD</span>
-              <Link href="/shop" className="circle-arrow" aria-label="Shop the collection" data-testid="link-about-shop">
-                <ArrowRight size={17} />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Curated Drop / The Edit */}
-      <section className="section page-wrap" style={{ paddingTop: 20 }}>
-        <div className="section-head">
-          <div>
-            <div className="eyebrow accent">01 / The edit</div>
-            <h2 className="display section-title">
-              THE LATEST
-              <br />
-              DROP
-            </h2>
-          </div>
-          <div className="section-copy">
-            A considered collection for a life in motion. Prices in Nigerian Naira (₦).
-            <br />
-            <Link href="/shop" className="text-link" style={{ marginTop: 22 }} data-testid="link-about-shop-latest">
-              Shop the edit <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-        {products.length > 0 ? (
-          <div className="product-grid">
-            {products.slice(0, 4).map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                isSaved={wishlist.includes(product.id)}
-                onToggleWish={onToggleWish}
-              />
-            ))}
-          </div>
-        ) : (
-          <CatalogNotice />
-        )}
-      </section>
-
       {/* Manifesto Section */}
       <section className="manifesto">
         <div className="page-wrap manifesto-inner">
@@ -2532,26 +2468,30 @@ function About({
         </div>
       </section>
 
-      {/* The Form Study (Split Feature) */}
-      <section className="split-feature">
-        <div className="feature-image">
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle="THE FORM STUDY // ARCHIVE EMBARGO"
-            style={{ height: '100%', minHeight: '100%', border: 'none' }}
-          />
-        </div>
-        <div className="feature-copy">
+      {/* The Form Study (Clean Typographic Panel - No Images) */}
+      <section className="page-wrap" style={{ margin: '80px auto' }}>
+        <div
+          style={{
+            background: 'hsl(var(--accent) / 0.04)',
+            border: '1px solid hsl(var(--border))',
+            padding: '60px 48px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 36,
+          }}
+        >
           <div>
-            <div className="feature-number">02 / THE FORM STUDY</div>
-            <h2 className="display">
+            <div className="feature-number" style={{ marginBottom: 12 }}>02 / THE FORM STUDY</div>
+            <h2 className="display" style={{ fontSize: 'clamp(28px, 4vw, 44px)', margin: 0 }}>
               CUT WITH
               <br />
               CONVICTION.
             </h2>
           </div>
-          <div>
-            <p>
+          <div style={{ maxWidth: 460 }}>
+            <p style={{ fontSize: 13, lineHeight: 1.8, margin: '0 0 24px', opacity: 0.85 }}>
               Our first study in tailoring: softened structure, severe proportions, and the kind of cloth that remembers
               where you have been.
             </p>
@@ -2583,37 +2523,6 @@ function About({
           </div>
         </div>
       </div>
-
-      {/* Field Notes (Editorial Strip) */}
-      <section className="section page-wrap">
-        <div className="section-head">
-          <div>
-            <div className="eyebrow accent">03 / Field notes</div>
-            <h2 className="display section-title">
-              THE WORLD
-              <br />
-              AROUND IT
-            </h2>
-          </div>
-          <div className="section-copy">
-            A look at the places, objects and people that make the DIRACE language.
-          </div>
-        </div>
-        <div className="editorial-strip">
-          <div className="editorial-tile">
-            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="01 — TEXTURE" style={{ height: '100%', width: '100%' }} />
-            <span className="editorial-label">01 — Texture</span>
-          </div>
-          <div className="editorial-tile">
-            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="02 — MOVEMENT" style={{ height: '100%', width: '100%' }} />
-            <span className="editorial-label">02 — Movement</span>
-          </div>
-          <div className="editorial-tile">
-            <WatermarkImage aspectRatio="3/4" label="COMING SOON" subtitle="03 — FORM" style={{ height: '100%', width: '100%' }} />
-            <span className="editorial-label">03 — Form</span>
-          </div>
-        </div>
-      </section>
 
       {/* Private Bulletin Newsletter Signup */}
       <Signup />
