@@ -1362,8 +1362,17 @@ function Signup() {
 function Shop({ wishlist, onToggleWish }: { wishlist: string[]; onToggleWish: (id: string) => void }) {
   const { products } = useStore();
   const [category, setCategory] = useState('All');
-  const categories = ['All', 'Outerwear', 'Tops', 'Bottoms', 'Caps', 'Denim'];
-  const filtered = category === 'All' ? products : products.filter((p) => p.category === category);
+  const categories = useMemo(() => {
+    const defaultList = ['All', 'Outerwear', 'Tops', 'Bottoms', 'Accessories', 'Caps', 'Denim'];
+    const extra = products
+      .map((p) => p.category)
+      .filter((cat) => cat && !defaultList.some((d) => d.toLowerCase() === cat.toLowerCase()));
+    return [...defaultList, ...Array.from(new Set(extra))];
+  }, [products]);
+  const filtered =
+    category === 'All'
+      ? products
+      : products.filter((p) => (p.category || '').toLowerCase() === category.toLowerCase());
 
   return (
     <main className="page-wrap">
@@ -4965,6 +4974,7 @@ function Admin() {
                   <option value="Outerwear">Outerwear</option>
                   <option value="Tops">Tops</option>
                   <option value="Bottoms">Bottoms</option>
+                  <option value="Accessories">Accessories</option>
                   <option value="Caps">Caps</option>
                   <option value="Denim">Denim</option>
                 </select>
@@ -5059,6 +5069,7 @@ function Admin() {
                       <option value="Outerwear">Outerwear</option>
                       <option value="Tops">Tops</option>
                       <option value="Bottoms">Bottoms</option>
+                      <option value="Accessories">Accessories</option>
                       <option value="Caps">Caps</option>
                       <option value="Denim">Denim</option>
                     </select>
@@ -5229,6 +5240,7 @@ function Admin() {
                       <option value="Outerwear">Outerwear</option>
                       <option value="Tops">Tops</option>
                       <option value="Bottoms">Bottoms</option>
+                      <option value="Accessories">Accessories</option>
                       <option value="Caps">Caps</option>
                       <option value="Denim">Denim</option>
                     </select>
