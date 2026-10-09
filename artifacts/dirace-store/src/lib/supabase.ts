@@ -1263,24 +1263,39 @@ export async function fetchCarouselSlidesFromSupabase(): Promise<CarouselSlide[]
   if (sb) {
     try {
       const { data, error } = await sb.from('carousel_slides').select('*').order('created_at', { ascending: true });
-      if (!error && data && data.length > 0) {
-        return data as CarouselSlide[];
+      if (!error && data) {
+        if (data.length > 0) {
+          localStorage.removeItem('dirace_carousel_explicitly_cleared');
+          return data as CarouselSlide[];
+        }
+        const explicitCleared = localStorage.getItem('dirace_carousel_explicitly_cleared');
+        if (explicitCleared === 'true') {
+          return [];
+        }
       }
     } catch (e) {
       console.warn('Supabase carousel fetch error:', e);
     }
   }
+
   try {
     const raw = localStorage.getItem(LOCAL_CAROUSEL_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
+
+  const explicitCleared = localStorage.getItem('dirace_carousel_explicitly_cleared');
+  if (explicitCleared === 'true') {
+    return [];
+  }
+
   return DEFAULT_CAROUSEL_SLIDES;
 }
 
 export async function addCarouselSlideToSupabase(slideInput: Omit<CarouselSlide, 'id'>): Promise<CarouselSlide> {
+  localStorage.removeItem('dirace_carousel_explicitly_cleared');
   const newSlide: CarouselSlide = {
     ...slideInput,
     id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1317,15 +1332,23 @@ export async function removeCarouselSlideFromSupabase(id: string): Promise<void>
   try {
     const local = await fetchCarouselSlidesFromSupabase();
     const updated = local.filter((item) => item.id !== id);
+    if (updated.length === 0) {
+      localStorage.setItem('dirace_carousel_explicitly_cleared', 'true');
+    }
     localStorage.setItem(LOCAL_CAROUSEL_KEY, JSON.stringify(updated));
   } catch {}
 }
 
 export async function saveCarouselSlidesToSupabase(slides: CarouselSlide[]): Promise<void> {
+  if (slides.length === 0) {
+    localStorage.setItem('dirace_carousel_explicitly_cleared', 'true');
+  } else {
+    localStorage.removeItem('dirace_carousel_explicitly_cleared');
+  }
+
   const sb = getSupabase();
   if (sb) {
     try {
-      // replace all or upsert
       await sb.from('carousel_slides').delete().neq('id', 'non_existent_id');
       if (slides.length > 0) {
         await sb.from('carousel_slides').insert(slides);
