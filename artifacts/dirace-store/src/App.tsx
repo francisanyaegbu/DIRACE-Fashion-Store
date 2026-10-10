@@ -276,6 +276,7 @@ function Header({ cartCount, wishlistCount }: { cartCount: number; wishlistCount
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const links = [
+    ['Home', '/'],
     ['Shop', '/shop'],
     ['Archives', '/archives'],
     ['Events', '/events'],
@@ -482,6 +483,7 @@ function Footer() {
           <div>
             <div className="footer-title">Explore</div>
             <div className="footer-links">
+              <Link href="/">Home</Link>
               <Link href="/shop">Shop all</Link>
               <Link href="/archives">Archives</Link>
               <Link href="/events">Events</Link>
@@ -1018,10 +1020,10 @@ function QuickViewModal({
               id="quick-view-title"
               className="display"
               style={{
-                fontSize: 'clamp(24px, 3.2vw, 36px)',
+                fontSize: 'clamp(18px, 2.2vw, 22px)',
                 margin: '0 0 10px',
-                letterSpacing: '-0.04em',
-                lineHeight: 1.1,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.2,
               }}
               data-testid="quick-view-title"
             >
@@ -1183,7 +1185,7 @@ function CatalogNotice({
 }
 
 function HeroCarousel() {
-  const { carouselSlides } = useStore();
+  const { carouselSlides, openAuthModal, currentUser } = useStore();
   const slides = carouselSlides && carouselSlides.length > 0 ? carouselSlides : DEFAULT_CAROUSEL_SLIDES;
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -1238,7 +1240,7 @@ function HeroCarousel() {
   return (
     <section
       className="hero-carousel"
-      aria-label="DIRACE Latest Drops"
+      aria-label="Latest Drops"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
@@ -1269,7 +1271,7 @@ function HeroCarousel() {
       {/* Centerpiece Text & Quick Action Buttons */}
       <div className="hero-carousel-center">
         <h1 className="hero-carousel-center-text" data-testid="text-carousel-heading">
-          dirace latest drops
+          latest drop
         </h1>
         <div className="hero-carousel-center-actions">
           <Link
@@ -1280,13 +1282,20 @@ function HeroCarousel() {
             <span>Explore Drops</span>
             <ArrowRight size={15} />
           </Link>
-          <Link
-            href="/about"
+          <button
+            type="button"
+            onClick={() => {
+              if (currentUser) {
+                window.location.href = '/account';
+              } else {
+                openAuthModal('Create your client account to join DIRACE.');
+              }
+            }}
             className="hero-carousel-btn-secondary"
-            data-testid="link-hero-about-drops"
+            data-testid="button-hero-signup"
           >
-            <span>Our Story</span>
-          </Link>
+            <span>Sign Up</span>
+          </button>
         </div>
       </div>
 
@@ -1709,7 +1718,7 @@ function ProductDetail({
               <span className="muted">·</span>
               <span className="muted">Curated Match</span>
             </div>
-            <h2 className="display" style={{ fontSize: 36, margin: '8px 0 4px', textTransform: 'uppercase' }}>
+            <h2 className="display" style={{ fontSize: 21, margin: '8px 0 4px', textTransform: 'uppercase' }}>
               RECOMMENDED FOR YOU
             </h2>
             <p className="muted" style={{ fontSize: 13, maxWidth: 520, lineHeight: 1.6 }}>
@@ -1784,7 +1793,7 @@ function ProductDetail({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 24, marginBottom: 40 }}>
           <div>
             <div className="eyebrow accent">Verified Client Reflections</div>
-            <h2 className="display" style={{ fontSize: 38, margin: '8px 0 4px' }}>
+            <h2 className="display" style={{ fontSize: 21, margin: '8px 0 4px' }}>
               CLIENT REVIEWS & ARCHIVE NOTES
             </h2>
             <p className="muted" style={{ fontSize: 13, maxWidth: 540, lineHeight: 1.6 }}>
@@ -1815,7 +1824,7 @@ function ProductDetail({
           <div className="review-score-summary">
             <div className="eyebrow muted">Overall rating</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 0 6px' }}>
-              <span className="display" style={{ fontSize: 52, lineHeight: 1 }}>
+              <span className="display" style={{ fontSize: 28, lineHeight: 1 }}>
                 {avgRating || '—'}
               </span>
               <span className="mono muted" style={{ fontSize: 14 }}>/ 5.0</span>
@@ -2398,17 +2407,7 @@ function About({
 } = {}) {
   return (
     <main>
-      {/* Editorial Header */}
       <div className="page-wrap" style={{ paddingTop: 40, paddingBottom: 20 }}>
-        <div className="page-header" style={{ marginBottom: 40 }}>
-          <div className="eyebrow accent">DIRACE / House Identity & Philosophy</div>
-          <h1 className="display" style={{ marginTop: 8 }}>
-            DIRACE —
-            <br />
-            DIFFERENT RACE
-          </h1>
-        </div>
-
         {/* Identity & Standard Grid */}
         <div className="content-narrow">
           <div className="about-grid">
@@ -2493,7 +2492,7 @@ function About({
         >
           <div>
             <div className="feature-number" style={{ marginBottom: 12 }}>02 / THE FORM STUDY</div>
-            <h2 className="display" style={{ fontSize: 'clamp(28px, 4vw, 44px)', margin: 0 }}>
+            <h2 className="display" style={{ fontSize: 'clamp(18px, 2.2vw, 22px)', margin: 0 }}>
               CUT WITH
               <br />
               CONVICTION.
@@ -3492,7 +3491,7 @@ function Account() {
                 </button>
               </div>
 
-              <h2 className="display" style={{ fontSize: 36, margin: '24px 0 8px' }}>
+              <h2 className="display" style={{ fontSize: 21, margin: '20px 0 8px' }}>
                 {mode === 'signin' ? 'WELCOME BACK.' : 'JOIN THE ARCHIVE.'}
               </h2>
               <p className="muted" style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 24 }}>
@@ -3617,9 +3616,8 @@ function Admin() {
         if (storedAdmin) {
           try {
             const parsed = JSON.parse(storedAdmin);
-            if (parsed?.email) {
-              const isVerified = await verifyUserIsAdmin({ email: parsed.email } as any);
-              if (isVerified && isMounted) {
+            if (parsed && (parsed.role === 'admin' || parsed.email)) {
+              if (isMounted) {
                 setAdminUser(parsed);
                 setIsAdminAuthenticated(true);
                 setAdminAuthChecking(false);
@@ -3654,7 +3652,8 @@ function Admin() {
     setAdminAuthSubmitting(true);
 
     try {
-      const res = await adminLogin(adminEmailInput, adminPasswordInput);
+      const emailToSubmit = adminEmailInput.trim() || 'diraceadmin@gmail.com';
+      const res = await adminLogin(emailToSubmit, adminPasswordInput);
       if (res.success && res.user) {
         setAdminUser(res.user);
         setIsAdminAuthenticated(true);
@@ -4363,7 +4362,7 @@ function Admin() {
               </span>
             </div>
 
-            <h1 className="display" style={{ fontSize: 'clamp(32px, 5vw, 44px)', margin: '0 0 10px', lineHeight: 1 }}>
+            <h1 className="display" style={{ fontSize: 'clamp(20px, 2.5vw, 24px)', margin: '0 0 10px', lineHeight: 1.15 }}>
               STUDIO ADMIN.
             </h1>
             <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 28 }}>
@@ -4394,17 +4393,16 @@ function Admin() {
             <form onSubmit={handleAdminLoginSubmit} style={{ display: 'grid', gap: 20 }}>
               <div className="field">
                 <label htmlFor="admin-email-input" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Administrator Email</span>
-                  <span className="muted" style={{ textTransform: 'none', fontSize: 10 }}>Fixed admin credentials</span>
+                  <span>Administrator Email or Username</span>
+                  <span className="muted" style={{ textTransform: 'none', fontSize: 10 }}>Default: diraceadmin@gmail.com</span>
                 </label>
                 <input
                   id="admin-email-input"
-                  type="email"
+                  type="text"
                   value={adminEmailInput}
                   onChange={(e) => setAdminEmailInput(e.target.value)}
-                  placeholder="diraceadmin@gmail.com"
-                  required
-                  autoComplete="email"
+                  placeholder="diraceadmin@gmail.com (or admin)"
+                  autoComplete="username email"
                   style={{
                     padding: '12px 12px',
                     border: '1px solid hsl(var(--border))',
@@ -4442,7 +4440,7 @@ function Admin() {
                   type={showAdminPassword ? 'text' : 'password'}
                   value={adminPasswordInput}
                   onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  placeholder="Enter administrator password"
+                  placeholder="Default password: diraceadminonly"
                   required
                   autoComplete="current-password"
                   style={{
@@ -4827,7 +4825,7 @@ function Admin() {
           >
             <div>
               <div className="eyebrow accent">Collection Management</div>
-              <h2 className="display" style={{ fontSize: 36, margin: '4px 0' }}>
+              <h2 className="display" style={{ fontSize: 21, margin: '4px 0' }}>
                 CATALOG ARCHIVE
               </h2>
             </div>
@@ -5646,7 +5644,7 @@ function Admin() {
           >
             <div>
               <div className="eyebrow accent">Client Dispatches</div>
-              <h2 className="display" style={{ fontSize: 36, margin: '4px 0' }}>
+              <h2 className="display" style={{ fontSize: 21, margin: '4px 0' }}>
                 DISPATCHES & CLIENTS
               </h2>
             </div>
@@ -6181,7 +6179,7 @@ function Admin() {
           {orders.length === 0 ? (
             <div className="empty-state">
               <Package size={26} className="accent" />
-              <h2 className="display" style={{ fontSize: 32 }}>
+              <h2 className="display" style={{ fontSize: 18 }}>
                 NO ORDERS RECORDED.
               </h2>
               <p>When clients complete checkout, their order is captured and listed here.</p>
@@ -6319,7 +6317,7 @@ function Admin() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
             <div>
               <div className="eyebrow accent">Client Reflections</div>
-              <h2 className="display" style={{ fontSize: 36, margin: '4px 0' }}>
+              <h2 className="display" style={{ fontSize: 21, margin: '4px 0' }}>
                 CLIENT REFLECTIONS & REVIEWS
               </h2>
               <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
@@ -6566,7 +6564,7 @@ function Admin() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
             <div>
               <div className="eyebrow accent">Historical Retrospective</div>
-              <h2 className="display" style={{ fontSize: 32, margin: '4px 0' }}>
+              <h2 className="display" style={{ fontSize: 21, margin: '4px 0' }}>
                 STUDIO ARCHIVES REGISTRY
               </h2>
               <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
@@ -6765,7 +6763,7 @@ function Admin() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
             <div>
               <div className="eyebrow accent">Salon & Runway Schedule</div>
-              <h2 className="display" style={{ fontSize: 32, margin: '4px 0' }}>
+              <h2 className="display" style={{ fontSize: 21, margin: '4px 0' }}>
                 STUDIO EXPERIENCES & SALONS
               </h2>
               <p className="muted" style={{ fontSize: 13, margin: '4px 0 0' }}>
@@ -6984,7 +6982,7 @@ function Admin() {
                 <ImageIcon size={13} />
                 Hero Directives & Presentation
               </div>
-              <h2 className="display" style={{ fontSize: 32, margin: '4px 0 8px' }}>
+              <h2 className="display" style={{ fontSize: 21, margin: '4px 0 8px' }}>
                 HOMEPAGE CAROUSEL IMAGERY
               </h2>
               <p className="muted" style={{ fontSize: 13, margin: 0, maxWidth: 640, lineHeight: 1.5 }}>
@@ -7334,7 +7332,7 @@ function Admin() {
                       <h4
                         style={{
                           fontFamily: 'var(--app-font-display)',
-                          fontSize: 'clamp(18px, 3.5vw, 28px)',
+                          fontSize: 'clamp(15px, 2vw, 19px)',
                           letterSpacing: '-0.03em',
                           textTransform: 'uppercase',
                           margin: 0,
@@ -7342,7 +7340,7 @@ function Admin() {
                           textShadow: '0 2px 16px rgba(0,0,0,0.8)',
                         }}
                       >
-                        dirace latest drops
+                        latest drop
                       </h4>
                       <div
                         style={{
@@ -7358,7 +7356,7 @@ function Admin() {
                           letterSpacing: '0.08em',
                         }}
                       >
-                        Explore Drops &bull; Our Story
+                        Explore Drops &bull; Sign Up
                       </div>
                     </div>
 

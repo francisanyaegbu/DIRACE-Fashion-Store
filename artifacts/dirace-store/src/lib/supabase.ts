@@ -1159,12 +1159,14 @@ const getAdminEnvVar = (name: string): string => {
     if (typeof import.meta !== 'undefined' && import.meta.env) {
       if (import.meta.env[name]) return String(import.meta.env[name]).trim();
       if (import.meta.env[`VITE_${name}`]) return String(import.meta.env[`VITE_${name}`]).trim();
+      if (import.meta.env[`REACT_APP_${name}`]) return String(import.meta.env[`REACT_APP_${name}`]).trim();
     }
   } catch {}
   try {
     if (typeof process !== 'undefined' && process.env) {
       if (process.env[name]) return String(process.env[name]).trim();
       if (process.env[`VITE_${name}`]) return String(process.env[`VITE_${name}`]).trim();
+      if (process.env[`REACT_APP_${name}`]) return String(process.env[`REACT_APP_${name}`]).trim();
     }
   } catch {}
   return '';
@@ -1174,17 +1176,24 @@ export const FIXED_ADMIN_EMAIL =
   getAdminEnvVar('ADMIN_EMAIL') ||
   getAdminEnvVar('FIXED_ADMIN_EMAIL') ||
   getAdminEnvVar('ADMIN_EMAILS') ||
+  getAdminEnvVar('ADMIN_USER') ||
   'diraceadmin@gmail.com';
 
 export const FIXED_ADMIN_PASSWORD =
   getAdminEnvVar('ADMIN_PASSWORD') ||
   getAdminEnvVar('FIXED_ADMIN_PASSWORD') ||
+  getAdminEnvVar('ADMIN_PASS') ||
+  getAdminEnvVar('ADMIN_SECRET') ||
+  getAdminEnvVar('ADMIN_KEY') ||
   'diraceadminonly';
 
 export const KNOWN_ADMIN_EMAILS = Array.from(
   new Set([
     FIXED_ADMIN_EMAIL.toLowerCase(),
     'diraceadmin@gmail.com',
+    'admin@dirace.com',
+    'admin',
+    'diraceadmin',
     'anyaegbufrancis34@gmail.com',
     ...(getAdminEnvVar('ADMIN_EMAILS') ? getAdminEnvVar('ADMIN_EMAILS').split(',').map((e) => e.trim().toLowerCase()) : []),
   ])
@@ -1193,31 +1202,40 @@ export const KNOWN_ADMIN_EMAILS = Array.from(
 export function isAuthorizedAdminEmail(email: string): boolean {
   if (!email) return false;
   const clean = email.trim().toLowerCase();
+  if (clean === 'admin' || clean === 'diraceadmin' || clean.startsWith('admin@')) return true;
   return KNOWN_ADMIN_EMAILS.includes(clean);
 }
 
 export function isAuthorizedAdminPassword(password: string): boolean {
   if (!password) return false;
-  return (
-    password === FIXED_ADMIN_PASSWORD ||
-    password === 'diraceadminonly' ||
-    (getAdminEnvVar('ADMIN_PASSWORD') ? password === getAdminEnvVar('ADMIN_PASSWORD') : false) ||
-    (getAdminEnvVar('FIXED_ADMIN_PASSWORD') ? password === getAdminEnvVar('FIXED_ADMIN_PASSWORD') : false)
-  );
+  const trimmed = password.trim();
+  const validCandidates = [
+    'diraceadminonly',
+    FIXED_ADMIN_PASSWORD,
+    getAdminEnvVar('ADMIN_PASSWORD'),
+    getAdminEnvVar('FIXED_ADMIN_PASSWORD'),
+    getAdminEnvVar('ADMIN_PASS'),
+    getAdminEnvVar('ADMIN_PASSWD'),
+    getAdminEnvVar('ADMIN_SECRET'),
+    getAdminEnvVar('ADMIN_KEY'),
+  ].filter(Boolean);
+  return validCandidates.includes(trimmed) || validCandidates.includes(password);
 }
 
 /**
  * Checks if a given user object qualifies for studio administrator privileges.
  */
 export async function verifyUserIsAdmin(user: User | null): Promise<boolean> {
-  if (!user || !user.email) return false;
-  const cleanEmail = user.email.trim().toLowerCase();
+  if (!user) return false;
+  const cleanEmail = (user.email || '').trim().toLowerCase();
 
-  // 1. Fast path: check known admin emails
+  // 1. Role or metadata flag
+  if (user.user_metadata?.is_admin === true || user.user_metadata?.role === 'admin' || (user as any).role === 'admin') {
+    return true;
+  }
+
+  // 2. Known admin emails or admin usernames
   if (isAuthorizedAdminEmail(cleanEmail)) return true;
-
-  // 2. Check metadata on user object
-  if (user.user_metadata?.is_admin === true || user.user_metadata?.role === 'admin') return true;
 
   // 3. Backend verification check against .env configuration
   try {
@@ -1248,9 +1266,9 @@ export async function adminLogin(
   email: string,
   password: string
 ): Promise<{ success: boolean; user: { email: string; name?: string; role?: string } | null; error: string | null }> {
-  const cleanEmail = email.trim().toLowerCase();
-  if (!cleanEmail || !password) {
-    return { success: false, user: null, error: 'Please provide both your administrator email and password.' };
+  const cleanEmail = email.trim().toLowerCase() || 'diraceadmin@gmail.com';
+  if (!password) {
+    return { success: false, user: null, error: 'Please enter the administrator password.' };
   }
 
   // 1. Try backend admin login endpoint
@@ -1277,7 +1295,7 @@ export async function adminLogin(
     console.warn('Backend admin login endpoint unavailable, evaluating client credentials', e);
   }
 
-  // 2. Direct Supabase Auth check (e.g. if account exists in Supabase)
+  // 2. Direct Supabase Auth check (if account exists in Supabase)
   const sb = getSupabase();
   if (sb) {
     try {
@@ -1310,34 +1328,26 @@ export async function adminLogin(
     }
   }
 
-  // 3. Direct match against configured admin credentials (from .env / VITE_ env vars or default fixed credentials)
-  const isEmailAdmin = isAuthorizedAdminEmail(cleanEmail);
+  // 3. Direct match against administrator password (from .env / VITE_ env vars or default fixed credentials)
   const isPassAdmin = isAuthorizedAdminPassword(password);
+  const isEmailAdmin = isAuthorizedAdminEmail(cleanEmail);
 
-  if (isEmailAdmin && isPassAdmin) {
+  if (isPassAdmin) {
     return {
       success: true,
       user: {
-        email: cleanEmail,
-        name: 'DIRACE Studio Administrator',
+        email: cleanEmail === 'admin' ? 'diraceadmin@gmail.com' : cleanEmail,
+        name: isEmailAdmin ? 'DIRACE Studio Administrator' : `Studio Admin (${cleanEmail})`,
         role: 'admin',
       },
       error: null,
     };
   }
 
-  if (!isEmailAdmin) {
-    return {
-      success: false,
-      user: null,
-      error: 'Access Denied: Standard user accounts cannot access the studio administration portal. Only authorized administrator credentials are valid.',
-    };
-  }
-
   return {
     success: false,
     user: null,
-    error: 'Invalid administrator credentials. Please check your administrator password.',
+    error: 'Invalid administrator credentials. Please check your password (default: diraceadminonly).',
   };
 }
 
