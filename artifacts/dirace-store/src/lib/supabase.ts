@@ -685,6 +685,7 @@ export interface ArchiveRecord {
   status: string;
   description: string;
   materials: string;
+  image?: string;
 }
 
 export interface StudioEvent {

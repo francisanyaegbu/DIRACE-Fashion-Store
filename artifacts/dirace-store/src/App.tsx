@@ -846,12 +846,30 @@ function ProductCard({
           data-testid={`link-product-${product.id}`}
           style={{ display: 'block', width: '100%', height: '100%' }}
         >
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle={product.name.toUpperCase()}
-            aspectRatio="3/4"
-            style={{ width: '100%', height: '100%' }}
-          />
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={product.alt || product.name}
+              loading="lazy"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'hsl(0 0% 92%)',
+                color: 'hsl(var(--muted-foreground))',
+                fontSize: 11,
+              }}
+              className="mono"
+            >
+              {product.name}
+            </div>
+          )}
         </Link>
         {product.badge && <span className="product-badge">{product.badge}</span>}
         <button
@@ -989,12 +1007,29 @@ function QuickViewModal({
         </button>
 
         <div className="quick-view-media">
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle={quickViewProduct.name.toUpperCase()}
-            aspectRatio="3/4"
-            style={{ width: '100%', height: '100%', minHeight: 300 }}
-          />
+          {quickViewProduct.image ? (
+            <img
+              src={quickViewProduct.image}
+              alt={quickViewProduct.alt || quickViewProduct.name}
+              style={{ width: '100%', height: '100%', minHeight: 300, objectFit: 'cover' }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                minHeight: 300,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'hsl(0 0% 92%)',
+                color: 'hsl(var(--muted-foreground))',
+              }}
+              className="mono"
+            >
+              {quickViewProduct.name}
+            </div>
+          )}
           {quickViewProduct.badge && (
             <span className="product-badge">{quickViewProduct.badge}</span>
           )}
@@ -1595,18 +1630,48 @@ function ProductDetail({
       </div>
       <div className="detail-layout">
         <div className="detail-gallery">
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle={`${product.name.toUpperCase()} // VIEW 01`}
-            aspectRatio="3/4"
-            style={{ width: '100%', height: '100%' }}
-          />
-          <WatermarkImage
-            label="COMING SOON"
-            subtitle={`${product.name.toUpperCase()} // VIEW 02`}
-            aspectRatio="3/4"
-            style={{ width: '100%', height: '100%' }}
-          />
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={`${product.name} - View 01`}
+              style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover' }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                aspectRatio: '3/4',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'hsl(0 0% 92%)',
+              }}
+              className="mono muted"
+            >
+              {product.name} // VIEW 01
+            </div>
+          )}
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={`${product.name} - View 02`}
+              style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', filter: 'brightness(0.96)' }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                aspectRatio: '3/4',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'hsl(0 0% 92%)',
+              }}
+              className="mono muted"
+            >
+              {product.name} // VIEW 02
+            </div>
+          )}
         </div>
         <div className="detail-info">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -2315,13 +2380,39 @@ function Archives() {
           <div className="archives-grid">
             {filtered.map((record) => (
               <article key={record.id} className="archive-card">
-                <div style={{ aspectRatio: '3/4', width: '100%', position: 'relative' }}>
-                  <WatermarkImage
-                    label="COMING SOON"
-                    subtitle={record.code}
-                    aspectRatio="3/4"
-                    style={{ width: '100%', height: '100%' }}
-                  />
+                <div style={{ aspectRatio: '3/4', width: '100%', position: 'relative', overflow: 'hidden', background: 'hsl(0 0% 92%)' }}>
+                  {(record as any).image ? (
+                    <img
+                      src={(record as any).image}
+                      alt={record.title}
+                      loading="lazy"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 24,
+                        textAlign: 'center',
+                        background: 'radial-gradient(circle at 50% 40%, hsl(0 0% 96%), hsl(0 0% 89%))',
+                      }}
+                    >
+                      <div className="eyebrow accent" style={{ fontSize: 10, letterSpacing: '0.18em', marginBottom: 8 }}>
+                        DIRACE ARCHIVE
+                      </div>
+                      <div className="mono" style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.1em' }}>
+                        {record.code}
+                      </div>
+                      <div className="muted mono" style={{ fontSize: 9, marginTop: 6, letterSpacing: '0.08em' }}>
+                        {record.volume} · {record.season}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="archive-meta">
                   <span className="mono muted">{record.season}</span>
@@ -2870,11 +2961,18 @@ function Cart({
           <div>
             {detailed.map((item, index) => (
               <div className="cart-item" key={`${item.product.id}-${item.size}`}>
-                <div style={{ width: 80, height: 100, flexShrink: 0 }}>
-                  <WatermarkImage
-                    label="COMING SOON"
-                    style={{ width: '100%', height: '100%', minHeight: 90 }}
-                  />
+                <div style={{ width: 80, height: 100, flexShrink: 0, overflow: 'hidden', background: 'hsl(0 0% 92%)' }}>
+                  {item.product.image ? (
+                    <img
+                      src={item.product.image}
+                      alt={item.product.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span className="mono muted" style={{ fontSize: 9 }}>DIRACE</span>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="eyebrow accent">{item.product.category}</div>
@@ -5400,11 +5498,18 @@ function Admin() {
                         className={isOutOfStock ? 'row-out-of-stock' : isLowStock ? 'row-low-stock' : ''}
                       >
                         <td style={{ width: 60 }}>
-                          <div style={{ width: 44, height: 52 }}>
-                            <WatermarkImage
-                              label="COMING SOON"
-                              style={{ width: '100%', height: '100%', minHeight: 48 }}
-                            />
+                          <div style={{ width: 44, height: 52, overflow: 'hidden', background: 'hsl(0 0% 92%)', borderRadius: 2 }}>
+                            {p.image ? (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <span className="mono muted" style={{ fontSize: 8 }}>N/A</span>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td>
