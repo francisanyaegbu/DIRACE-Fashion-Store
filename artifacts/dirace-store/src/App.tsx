@@ -3649,10 +3649,16 @@ function Admin() {
   const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminAuthError(null);
+
+    const emailToSubmit = adminEmailInput.trim();
+    if (!emailToSubmit || !adminPasswordInput) {
+      setAdminAuthError('Please enter your administrator email or username and password.');
+      return;
+    }
+
     setAdminAuthSubmitting(true);
 
     try {
-      const emailToSubmit = adminEmailInput.trim() || 'diraceadmin@gmail.com';
       const res = await adminLogin(emailToSubmit, adminPasswordInput);
       if (res.success && res.user) {
         setAdminUser(res.user);
@@ -4394,14 +4400,14 @@ function Admin() {
               <div className="field">
                 <label htmlFor="admin-email-input" style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Administrator Email or Username</span>
-                  <span className="muted" style={{ textTransform: 'none', fontSize: 10 }}>Default: diraceadmin@gmail.com</span>
+                  <span className="muted" style={{ textTransform: 'none', fontSize: 10 }}>Privileged Access</span>
                 </label>
                 <input
                   id="admin-email-input"
                   type="text"
                   value={adminEmailInput}
                   onChange={(e) => setAdminEmailInput(e.target.value)}
-                  placeholder="diraceadmin@gmail.com (or admin)"
+                  placeholder="admin@dirace.com"
                   autoComplete="username email"
                   style={{
                     padding: '12px 12px',
@@ -4440,7 +4446,7 @@ function Admin() {
                   type={showAdminPassword ? 'text' : 'password'}
                   value={adminPasswordInput}
                   onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  placeholder="Default password: diraceadminonly"
+                  placeholder="••••••••••••"
                   required
                   autoComplete="current-password"
                   style={{
@@ -8124,7 +8130,7 @@ function App() {
     }
   });
 
-  // Pull latest persistent online content from Supabase Storage & API on mount (works on any device)
+  // Pull latest persistent online content from Backend API & Supabase (works in real-time across any device)
   useEffect(() => {
     let isMounted = true;
     async function syncOnlineContent() {
@@ -8143,9 +8149,47 @@ function App() {
         console.warn('Background online sync note:', err);
       }
     }
+
+    // Initial sync
     syncOnlineContent();
+
+    // Re-sync whenever the tab or device becomes active/focused
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncOnlineContent();
+      }
+    };
+    const handleFocus = () => {
+      syncOnlineContent();
+    };
+
+    // Re-sync if changed in another tab on same device
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'dirace_carousel_slides' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) setCarouselSlides(parsed);
+        } catch {}
+      }
+    };
+
+    // Periodic background sync across devices every 20 seconds
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncOnlineContent();
+      }
+    }, 20000);
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorage);
+
     return () => {
       isMounted = false;
+      clearInterval(intervalId);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 

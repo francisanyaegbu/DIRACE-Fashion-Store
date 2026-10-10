@@ -63,19 +63,17 @@ router.get("/", async (_req, res) => {
   res.setHeader("Expires", "0");
 
   try {
-    if (supabase) {
-      const { data: pubData } = supabase.storage
+    // If cache is empty and Supabase is configured, try direct storage download once
+    if ((!inMemorySlidesCache || inMemorySlidesCache.length === 0) && supabase) {
+      const { data: blob, error } = await supabase.storage
         .from("products")
-        .getPublicUrl("config/carousel_slides.json");
-      if (pubData?.publicUrl) {
-        const fetchRes = await fetch(`${pubData.publicUrl}?t=${Date.now()}`);
-        if (fetchRes.ok) {
-          const json = await fetchRes.json();
-          if (Array.isArray(json) && json.length > 0) {
-            inMemorySlidesCache = json;
-            saveLocalBackup(json);
-            return res.json(json);
-          }
+        .download("config/carousel_slides.json");
+      if (!error && blob) {
+        const text = await blob.text();
+        const json = JSON.parse(text);
+        if (Array.isArray(json) && json.length > 0) {
+          inMemorySlidesCache = json;
+          saveLocalBackup(json);
         }
       }
     }

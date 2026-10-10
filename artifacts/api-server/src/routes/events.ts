@@ -44,19 +44,16 @@ function saveLocalBackup(events: any[]) {
 router.get("/", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   try {
-    if (supabase) {
-      const { data: pubData } = supabase.storage
+    if ((!inMemoryEventsCache || inMemoryEventsCache.length === 0) && supabase) {
+      const { data: blob, error } = await supabase.storage
         .from("products")
-        .getPublicUrl("config/studio_events.json");
-      if (pubData?.publicUrl) {
-        const fetchRes = await fetch(`${pubData.publicUrl}?t=${Date.now()}`);
-        if (fetchRes.ok) {
-          const json = await fetchRes.json();
-          if (Array.isArray(json)) {
-            inMemoryEventsCache = json;
-            saveLocalBackup(json);
-            return res.json(json);
-          }
+        .download("config/studio_events.json");
+      if (!error && blob) {
+        const text = await blob.text();
+        const json = JSON.parse(text);
+        if (Array.isArray(json)) {
+          inMemoryEventsCache = json;
+          saveLocalBackup(json);
         }
       }
     }

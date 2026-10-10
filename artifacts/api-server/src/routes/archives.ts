@@ -44,19 +44,16 @@ function saveLocalBackup(archives: any[]) {
 router.get("/", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   try {
-    if (supabase) {
-      const { data: pubData } = supabase.storage
+    if ((!inMemoryArchivesCache || inMemoryArchivesCache.length === 0) && supabase) {
+      const { data: blob, error } = await supabase.storage
         .from("products")
-        .getPublicUrl("config/studio_archives.json");
-      if (pubData?.publicUrl) {
-        const fetchRes = await fetch(`${pubData.publicUrl}?t=${Date.now()}`);
-        if (fetchRes.ok) {
-          const json = await fetchRes.json();
-          if (Array.isArray(json)) {
-            inMemoryArchivesCache = json;
-            saveLocalBackup(json);
-            return res.json(json);
-          }
+        .download("config/studio_archives.json");
+      if (!error && blob) {
+        const text = await blob.text();
+        const json = JSON.parse(text);
+        if (Array.isArray(json)) {
+          inMemoryArchivesCache = json;
+          saveLocalBackup(json);
         }
       }
     }

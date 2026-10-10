@@ -1,14 +1,14 @@
 [
   {
-    "id": "carousel-slide-1",
-    "image": "/WhatsApp_Image_2026-10-02_at_09.51.09.jpeg",
-    "alt": "DIRACE Drop Look 01",
-    "title": "Drop Look 01"
-  },
-  {
     "id": "carousel-slide-2",
     "image": "/WhatsApp_Image_2026-10-02_at_09.50.10.jpeg",
     "alt": "DIRACE Drop Look 02",
     "title": "Drop Look 02"
+  },
+  {
+    "image": "https://jcqajhxctyspiowhkecb.supabase.co/storage/v1/object/public/products/carousel/WhatsApp_Image_2026-10-02_at_09_51_09_jpeg_1791536595914.jpeg",
+    "alt": "WhatsApp Image 2026 10 02 at 09.51.09",
+    "title": "Look 3",
+    "id": "slide-1791536600339-l56j"
   }
 ]

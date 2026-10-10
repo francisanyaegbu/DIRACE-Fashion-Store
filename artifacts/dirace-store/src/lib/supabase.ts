@@ -716,14 +716,30 @@ export const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
 
 export async function fetchCarouselSlidesOnline(): Promise<CarouselSlide[]> {
   const cacheKey = 'dirace_carousel_slides';
-  const sb = getSupabase();
 
-  // 1. Try Supabase Public CDN Storage (Fast & Global across any device)
+  // 1. Try Backend API first (authoritative, real-time sync across all devices)
+  try {
+    const res = await fetch(`/api/carousel?t=${Date.now()}`, { cache: 'no-store' });
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json) && json.length > 0) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(json));
+        } catch {}
+        return json as CarouselSlide[];
+      }
+    }
+  } catch (err) {
+    console.warn('Backend carousel sync notice:', err);
+  }
+
+  // 2. Try Supabase Public CDN Storage fallback
+  const sb = getSupabase();
   if (sb) {
     try {
       const { data } = sb.storage.from('products').getPublicUrl('config/carousel_slides.json');
       if (data?.publicUrl) {
-        const res = await fetch(`${data.publicUrl}?t=${Date.now()}`);
+        const res = await fetch(`${data.publicUrl}?t=${Date.now()}`, { cache: 'no-store' });
         if (res.ok) {
           const json = await res.json();
           if (Array.isArray(json) && json.length > 0) {
@@ -738,20 +754,6 @@ export async function fetchCarouselSlidesOnline(): Promise<CarouselSlide[]> {
       console.warn('Supabase storage carousel fetch notice:', err);
     }
   }
-
-  // 2. Try Backend API
-  try {
-    const res = await fetch(`/api/carousel?t=${Date.now()}`);
-    if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json) && json.length > 0) {
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(json));
-        } catch {}
-        return json as CarouselSlide[];
-      }
-    }
-  } catch {}
 
   // 3. Fallback to localStorage
   try {
@@ -771,45 +773,47 @@ export async function saveCarouselSlidesOnline(slides: CarouselSlide[]): Promise
     localStorage.setItem(cacheKey, JSON.stringify(slides));
   } catch {}
 
-  const sb = getSupabase();
   let savedOnline = false;
 
-  // 1. Save directly to Supabase Public Storage
-  if (sb) {
-    try {
-      const jsonBlob = new Blob([JSON.stringify(slides, null, 2)], { type: 'application/json' });
-      const { error } = await sb.storage.from('products').upload('config/carousel_slides.json', jsonBlob, {
-        contentType: 'application/json',
-        upsert: true,
-      });
-      if (!error) savedOnline = true;
-    } catch (err) {
-      console.warn('Failed to upload carousel slides to Supabase:', err);
-    }
-  }
-
-  // 2. Save to Backend API
+  // 1. Save to Backend API (which syncs in-memory, disk, and Supabase using service role key)
   try {
-    await fetch('/api/carousel', {
+    const res = await fetch('/api/carousel', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slides }),
     });
-    savedOnline = true;
-  } catch {}
+    if (res.ok) savedOnline = true;
+  } catch (err) {
+    console.warn('Failed to sync carousel slides to backend API:', err);
+  }
 
   return savedOnline;
 }
 
 export async function fetchArchivesOnline(): Promise<ArchiveRecord[]> {
   const cacheKey = 'dirace_studio_archives';
-  const sb = getSupabase();
 
+  // 1. Try Backend API first
+  try {
+    const res = await fetch(`/api/archives?t=${Date.now()}`, { cache: 'no-store' });
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json)) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(json));
+        } catch {}
+        return json as ArchiveRecord[];
+      }
+    }
+  } catch {}
+
+  // 2. Try Supabase Public CDN Storage fallback
+  const sb = getSupabase();
   if (sb) {
     try {
       const { data } = sb.storage.from('products').getPublicUrl('config/studio_archives.json');
       if (data?.publicUrl) {
-        const res = await fetch(`${data.publicUrl}?t=${Date.now()}`);
+        const res = await fetch(`${data.publicUrl}?t=${Date.now()}`, { cache: 'no-store' });
         if (res.ok) {
           const json = await res.json();
           if (Array.isArray(json)) {
@@ -822,19 +826,6 @@ export async function fetchArchivesOnline(): Promise<ArchiveRecord[]> {
       }
     } catch {}
   }
-
-  try {
-    const res = await fetch(`/api/archives?t=${Date.now()}`);
-    if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json)) {
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(json));
-        } catch {}
-        return json as ArchiveRecord[];
-      }
-    }
-  } catch {}
 
   try {
     const saved = localStorage.getItem(cacheKey);
@@ -850,17 +841,6 @@ export async function saveArchivesOnline(archives: ArchiveRecord[]): Promise<boo
     localStorage.setItem(cacheKey, JSON.stringify(archives));
   } catch {}
 
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const jsonBlob = new Blob([JSON.stringify(archives, null, 2)], { type: 'application/json' });
-      await sb.storage.from('products').upload('config/studio_archives.json', jsonBlob, {
-        contentType: 'application/json',
-        upsert: true,
-      });
-    } catch {}
-  }
-
   try {
     await fetch('/api/archives', {
       method: 'PUT',
@@ -874,13 +854,28 @@ export async function saveArchivesOnline(archives: ArchiveRecord[]): Promise<boo
 
 export async function fetchEventsOnline(): Promise<StudioEvent[]> {
   const cacheKey = 'dirace_studio_events';
-  const sb = getSupabase();
 
+  // 1. Try Backend API first
+  try {
+    const res = await fetch(`/api/events?t=${Date.now()}`, { cache: 'no-store' });
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json)) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(json));
+        } catch {}
+        return json as StudioEvent[];
+      }
+    }
+  } catch {}
+
+  // 2. Try Supabase Public CDN Storage fallback
+  const sb = getSupabase();
   if (sb) {
     try {
       const { data } = sb.storage.from('products').getPublicUrl('config/studio_events.json');
       if (data?.publicUrl) {
-        const res = await fetch(`${data.publicUrl}?t=${Date.now()}`);
+        const res = await fetch(`${data.publicUrl}?t=${Date.now()}`, { cache: 'no-store' });
         if (res.ok) {
           const json = await res.json();
           if (Array.isArray(json)) {
@@ -895,19 +890,6 @@ export async function fetchEventsOnline(): Promise<StudioEvent[]> {
   }
 
   try {
-    const res = await fetch(`/api/events?t=${Date.now()}`);
-    if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json)) {
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(json));
-        } catch {}
-        return json as StudioEvent[];
-      }
-    }
-  } catch {}
-
-  try {
     const saved = localStorage.getItem(cacheKey);
     if (saved) return JSON.parse(saved);
   } catch {}
@@ -920,17 +902,6 @@ export async function saveEventsOnline(events: StudioEvent[]): Promise<boolean> 
   try {
     localStorage.setItem(cacheKey, JSON.stringify(events));
   } catch {}
-
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const jsonBlob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' });
-      await sb.storage.from('products').upload('config/studio_events.json', jsonBlob, {
-        contentType: 'application/json',
-        upsert: true,
-      });
-    } catch {}
-  }
 
   try {
     await fetch('/api/events', {
@@ -1266,7 +1237,10 @@ export async function adminLogin(
   email: string,
   password: string
 ): Promise<{ success: boolean; user: { email: string; name?: string; role?: string } | null; error: string | null }> {
-  const cleanEmail = email.trim().toLowerCase() || 'diraceadmin@gmail.com';
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, user: null, error: 'Please enter your administrator username or email.' };
+  }
   if (!password) {
     return { success: false, user: null, error: 'Please enter the administrator password.' };
   }
@@ -1347,7 +1321,7 @@ export async function adminLogin(
   return {
     success: false,
     user: null,
-    error: 'Invalid administrator credentials. Please check your password (default: diraceadminonly).',
+    error: 'Invalid administrator credentials. Access denied.',
   };
 }
 

@@ -207,7 +207,7 @@ router.post("/admin-login", async (req: Request, res: Response): Promise<void> =
     // Access granted if password is valid OR if authenticated via Supabase admin user
     if (!isPasswordValid && !supabaseAuthSuccess) {
       res.status(401).json({
-        error: "Invalid administrator credentials. Please check your administrator password (default: diraceadminonly).",
+        error: "Invalid administrator credentials. Access denied.",
       });
       return;
     }
